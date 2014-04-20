@@ -1,5 +1,9 @@
 package logo
 
+import (
+	"math"
+)
+
 const (
 	penStateUp int = iota
 	penStateDown
@@ -67,7 +71,7 @@ func _t_Forward(frame Frame, parameters []Node) (Node, error) {
 	x2 := int64(math.Cos(delta*turtle.d*dToR)) + turtle.x
 	y2 := int64(math.Sin(delta*turtle.d*dToR)) + turtle.y
 
-	if turtle.penState == penDown {
+	if turtle.penState == penStateDown {
 		onDrawLine(turtle.x, turtle.y, x2, y2)
 	}
 
@@ -89,7 +93,7 @@ func _t_Back(frame Frame, parameters []Node) (Node, error) {
 	x2 := int64(math.Cos(delta*turtle.d*dToR)) - turtle.x
 	y2 := int64(math.Sin(delta*turtle.d*dToR)) - turtle.y
 
-	if turtle.penState == penDown {
+	if turtle.penState == penStateDown {
 		onDrawLine(turtle.x, turtle.y, x2, y2)
 	}
 
