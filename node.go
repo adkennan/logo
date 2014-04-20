@@ -55,11 +55,7 @@ func (this *WordNode) addNode(node Node) {
 func (this *WordNode) position() (int, int) { return this.line, this.col }
 
 func (this *WordNode) String() string {
-	s := "\"" + this.value + "\""
-	if this.next() != nil {
-		s += " " + this.next().String()
-	}
-	return s
+	return this.value
 }
 
 func (this *WordNode) clone() Node {
@@ -125,18 +121,18 @@ func printNode(n Node, includeBrackets bool) {
 
 	switch pn := n.(type) {
 	case *WordNode:
-		fmt.Print(pn.value)
+		Print(pn.value)
 
 	case *ListNode:
 		if includeBrackets {
-			fmt.Print("[ ")
+			Print("[ ")
 		}
 		for nn := pn.firstChild; nn != nil; nn = nn.next() {
 			printNode(nn, true)
-			fmt.Print(" ")
+			Print(" ")
 		}
 		if includeBrackets {
-			fmt.Print("]")
+			Print("]")
 		}
 	}
 }
@@ -169,7 +165,11 @@ func evalToNumber(node Node) (float64, error) {
 
 	switch pn := node.(type) {
 	case *WordNode:
-		return strconv.ParseFloat(pn.value, 64)
+		r, err := strconv.ParseFloat(pn.value, 64)
+		if err != nil {
+			return 0, errorBadInput(node)
+		}
+		return r, nil
 	}
 	return 0, errorNumberExpected(node)
 }
@@ -218,7 +218,7 @@ func evalInstructionList(frame Frame, node Node) error {
 	return nil
 }
 
-func nodesEqual(x, y Node) bool {
+func nodesEqual(x, y Node, numericCompare bool) bool {
 	if x.nodeType() != y.nodeType() {
 		return false
 	}
@@ -228,11 +228,13 @@ func nodesEqual(x, y Node) bool {
 		wx := x.(*WordNode)
 		wy := y.(*WordNode)
 
-		nx, ex := evalToNumber(wx)
-		ny, ey := evalToNumber(wy)
+		if numericCompare {
+			nx, ex := evalToNumber(wx)
+			ny, ey := evalToNumber(wy)
 
-		if ex == nil && ey == nil {
-			return nx == ny
+			if ex == nil && ey == nil {
+				return nx == ny
+			}
 		}
 
 		return strings.ToUpper(wx.value) == strings.ToUpper(wy.value)
@@ -249,7 +251,7 @@ func nodesEqual(x, y Node) bool {
 		cy := ly.firstChild
 		for cx != nil && cy != nil {
 
-			if !nodesEqual(cx, cy) {
+			if !nodesEqual(cx, cy, numericCompare) {
 				return false
 			}
 

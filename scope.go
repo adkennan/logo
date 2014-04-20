@@ -15,7 +15,27 @@ type InterpretedProcedure struct {
 	firstNode  Node
 }
 
+func writeTrace(procName string, parentFrame Frame) {
+
+	if !traceEnabled {
+		return
+	}
+
+	depth := 0
+	for f := parentFrame; f != nil; f = f.parentFrame() {
+		depth++
+	}
+
+	if TraceHandler == nil {
+		Print("> " + strings.Repeat(" ", depth) + procName + "\n")
+	} else {
+		TraceHandler(depth, procName)
+	}
+}
+
 func (this *InterpretedProcedure) createFrame(scope Scope, frame Frame) Frame {
+
+	writeTrace(this.name, frame)
 	return &InterpretedFrame{scope, frame, this, nil, nil, make(map[string]*Variable)}
 }
 
