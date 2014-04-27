@@ -12,7 +12,11 @@ func assert(t *testing.T, n Node, err error, expected string) {
 		return
 	}
 
-	s := n.String()
+	s := ""
+	for nn := n; nn != nil; nn = nn.next() {
+		s += nn.String() + " "
+	}
+	s = s[0 : len(s)-1]
 	if s != expected {
 		t.Errorf("Expected \"%s\" was \"%s\"", expected, s)
 	}
@@ -21,42 +25,42 @@ func assert(t *testing.T, n Node, err error, expected string) {
 func TestParseSingleWord(t *testing.T) {
 
 	n, err := ParseString("Hello")
-	assert(t, n, err, "\"Hello\"")
+	assert(t, n, err, "Hello")
 }
 
 func TestParseMultipleWords(t *testing.T) {
 
 	n, err := ParseString("Hello World")
-	assert(t, n, err, "\"Hello\" \"World\"")
+	assert(t, n, err, "Hello World")
 }
 
 func TestParseList(t *testing.T) {
 
 	n, err := ParseString("[Hello World]")
-	assert(t, n, err, "[ \"Hello\" \"World\" ]")
+	assert(t, n, err, "[ Hello World ]")
 }
 
 func TestParseNestedList(t *testing.T) {
 
 	n, err := ParseString("[[Hello] [ World] ]")
-	assert(t, n, err, "[ [ \"Hello\" ] [ \"World\" ] ]")
+	assert(t, n, err, "[ [ Hello ] [ World ] ]")
 }
 
 func TestMixedWordAndLists(t *testing.T) {
 
 	n, err := ParseString("Hello [ My Little ] Ponies")
-	assert(t, n, err, "\"Hello\" [ \"My\" \"Little\" ] \"Ponies\"")
+	assert(t, n, err, "Hello [ My Little ] Ponies")
 }
 
 func TestNewLine(t *testing.T) {
 
 	n, err := ParseString("Hello\nWorld")
-	assert(t, n, err, "\"Hello\" \"World\"")
+	assert(t, n, err, "Hello World")
 }
 
 func TestEscape(t *testing.T) {
 	n, err := ParseString("Hello\\ Sweet World")
-	assert(t, n, err, "\"Hello Sweet\" \"World\"")
+	assert(t, n, err, "Hello Sweet World")
 }
 
 func TestUnclosedList(t *testing.T) {

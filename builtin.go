@@ -1,11 +1,9 @@
 package logo
 
 import (
-	"bufio"
-	"fmt"
+	"io"
 	"math"
 	"math/rand"
-	"os"
 	"strings"
 	"time"
 )
@@ -20,20 +18,16 @@ var trueNode Node = newWordNode(-1, -1, keywordTrue, true)
 var falseNode Node = newWordNode(-1, -1, keywordFalse, true)
 var randomMax Node = newWordNode(-1, -1, "10", true)
 
-var OutputHandler func(string) error
-var TraceHandler func(int, string)
-
-var ExitHandler func()
-
 var traceEnabled bool
 
-func Print(text string) error {
-	if OutputHandler != nil {
-		return OutputHandler(text)
-	}
+func _bi_Output(frame Frame, parameters []Node) (Node, error) {
+	frame.parentFrame().setReturnValue(parameters[0])
+	return nil, nil
+}
 
-	_, err := fmt.Print(text)
-	return err
+func _bi_Stop(frame Frame, parameters []Node) (Node, error) {
+	frame.parentFrame().stop()
+	return nil, nil
 }
 
 func _bi_Repeat(frame Frame, parameters []Node) (Node, error) {
@@ -53,27 +47,27 @@ func _bi_Repeat(frame Frame, parameters []Node) (Node, error) {
 
 func _bi_Print(frame Frame, parameters []Node) (Node, error) {
 
-	printNode(parameters[0], false)
-	Print("\n")
+	printNode(frame.workspace(), parameters[0], false)
+	frame.workspace().print("\n")
 	return nil, nil
 }
 
 func _bi_FPrint(frame Frame, parameters []Node) (Node, error) {
 
-	printNode(parameters[0], true)
-	Print("\n")
+	printNode(frame.workspace(), parameters[0], true)
+	frame.workspace().print("\n")
 	return nil, nil
 }
 
 func _bi_Type(frame Frame, parameters []Node) (Node, error) {
 
-	printNode(parameters[0], false)
+	printNode(frame.workspace(), parameters[0], false)
 	return nil, nil
 }
 
 func _bi_FType(frame Frame, parameters []Node) (Node, error) {
 
-	printNode(parameters[0], true)
+	printNode(frame.workspace(), parameters[0], true)
 	return nil, nil
 }
 
@@ -93,23 +87,23 @@ func _bi_If(frame Frame, parameters []Node) (Node, error) {
 
 func _bi_ReadList(frame Frame, parameters []Node) (Node, error) {
 
-	bio := bufio.NewReader(os.Stdin)
-	line, _, err := bio.ReadLine()
+	line, err := frame.workspace().files.reader.ReadLine()
 	if err != nil {
 		return nil, err
 	}
-	return ParseString("[ " + string(line) + " ]")
+	return ParseString("[ " + line + " ]")
 }
 
 func _bi_Request(frame Frame, parameters []Node) (Node, error) {
 
-	bio := bufio.NewReader(os.Stdin)
-	fmt.Print("? ")
-	line, _, err := bio.ReadLine()
+	fw := frame.workspace().files.reader
+	fr := frame.workspace().files.writer
+	fw.Write(promptPrimary)
+	line, err := fr.ReadLine()
 	if err != nil {
 		return nil, err
 	}
-	return ParseString("[ " + string(line) + " ]")
+	return ParseString("[ " + line + " ]")
 }
 
 func _bi_IfElse(frame Frame, parameters []Node) (Node, error) {
@@ -138,11 +132,16 @@ func _bi_Sum(frame Frame, parameters []Node) (Node, error) {
 
 func _bi_Difference(frame Frame, parameters []Node) (Node, error) {
 
-	x, y, err := evalNumericParams(parameters[0], parameters[1])
+	var x, y float64
+	var err error
+	x, y, err = evalNumericParams(parameters[0], parameters[1])
 	if err != nil {
 		return nil, err
 	}
 
+	if frame.caller().isInfix {
+		return createNumericNode(y - x), nil
+	}
 	return createNumericNode(x - y), nil
 }
 
@@ -163,6 +162,9 @@ func _bi_Quotient(frame Frame, parameters []Node) (Node, error) {
 		return nil, err
 	}
 
+	if frame.caller().isInfix {
+		return createNumericNode(y / x), nil
+	}
 	return createNumericNode(x / y), nil
 }
 
@@ -234,7 +236,9 @@ func _bi_Greaterp(frame Frame, parameters []Node) (Node, error) {
 	nx, ex := evalToNumber(parameters[0])
 	ny, ey := evalToNumber(parameters[1])
 
-	if ex == nil && ey == nil && nx > ny {
+	infix := frame.caller().isInfix
+
+	if ex == nil && ey == nil && ((infix && nx < ny) || (!infix && nx > ny)) {
 		return trueNode, nil
 	}
 	return falseNode, nil
@@ -245,7 +249,35 @@ func _bi_Lessp(frame Frame, parameters []Node) (Node, error) {
 	nx, ex := evalToNumber(parameters[0])
 	ny, ey := evalToNumber(parameters[1])
 
-	if ex == nil && ey == nil && nx < ny {
+	infix := frame.caller().isInfix
+
+	if ex == nil && ey == nil && ((infix && nx > ny) || (!infix && nx < ny)) {
+		return trueNode, nil
+	}
+	return falseNode, nil
+}
+
+func _bi_GreaterEqualp(frame Frame, parameters []Node) (Node, error) {
+
+	nx, ex := evalToNumber(parameters[0])
+	ny, ey := evalToNumber(parameters[1])
+
+	infix := frame.caller().isInfix
+
+	if ex == nil && ey == nil && ((infix && nx <= ny) || (!infix && nx >= ny)) {
+		return trueNode, nil
+	}
+	return falseNode, nil
+}
+
+func _bi_LessEqualp(frame Frame, parameters []Node) (Node, error) {
+
+	nx, ex := evalToNumber(parameters[0])
+	ny, ey := evalToNumber(parameters[1])
+
+	infix := frame.caller().isInfix
+
+	if ex == nil && ey == nil && ((infix && nx >= ny) || (!infix && nx <= ny)) {
 		return trueNode, nil
 	}
 	return falseNode, nil
@@ -720,13 +752,10 @@ func _bi_Item(frame Frame, parameters []Node) (Node, error) {
 
 func _bi_Goodbye(frame Frame, parameters []Node) (Node, error) {
 
-	Print("Seeya!\n\n")
+	frame.workspace().print("Seeya!\n\n")
 
-	if ExitHandler != nil {
-		ExitHandler()
-	} else {
-		os.Exit(0)
-	}
+	frame.workspace().exit()
+
 	return nil, nil
 }
 
@@ -788,14 +817,14 @@ func _bi_Not(frame Frame, parameters []Node) (Node, error) {
 
 func _bi_Trace(frame Frame, parameters []Node) (Node, error) {
 
-	traceEnabled = true
+	frame.workspace().setTrace(true)
 
 	return nil, nil
 }
 
 func _bi_Untrace(frame Frame, parameters []Node) (Node, error) {
 
-	traceEnabled = false
+	frame.workspace().setTrace(false)
 
 	return nil, nil
 }
@@ -822,80 +851,557 @@ func _bi_Run(frame Frame, parameters []Node) (Node, error) {
 	return nil, evalInstructionList(frame, parameters[0])
 }
 
-func CreateBuiltInScope() Scope {
+func _bi_Po(frame Frame, parameters []Node) (Node, error) {
 
-	scope := &BuiltInScope{make(map[string]Procedure, 10), nil}
+	names, err := toWordList(parameters[0])
+	if err != nil {
+		return nil, err
+	}
+	ws := frame.workspace()
+	for _, n := range names {
+		p := ws.findProcedure(strings.ToUpper(n.value))
+		if p == nil {
+			continue
+		}
+		switch ip := p.(type) {
+		case *InterpretedProcedure:
+			if !ip.buried {
+				ws.print(ip.source)
+				ws.print("\n")
+			}
+		}
+	}
 
-	scope.registerBuiltIn("PRINT", "PR", 1, _bi_Print)
-	scope.registerBuiltIn("FPRINT", "FP", 1, _bi_FPrint)
-	scope.registerBuiltIn("TYPE", "TY", 1, _bi_Type)
-	scope.registerBuiltIn("FTYPE", "FTY", 1, _bi_FType)
+	return nil, nil
+}
 
-	scope.registerBuiltIn("READLIST", "RL", 0, _bi_ReadList)
-	scope.registerBuiltIn("REQUEST", "", 0, _bi_Request)
+func _bi_PoAll(frame Frame, parameters []Node) (Node, error) {
 
-	scope.registerBuiltIn("REPEAT", "", 2, _bi_Repeat)
-	scope.registerBuiltIn("IF", "", 2, _bi_If)
-	scope.registerBuiltIn("IFELSE", "", 3, _bi_IfElse)
+	ws := frame.workspace()
 
-	scope.registerBuiltIn("SUM", "", 2, _bi_Sum)
-	scope.registerBuiltIn("DIFFERENCE", "DIFF", 2, _bi_Difference)
-	scope.registerBuiltIn("PRODUCT", "", 2, _bi_Product)
-	scope.registerBuiltIn("QUOTIENT", "", 2, _bi_Quotient)
-	scope.registerBuiltIn("REMAINDER", "MOD", 2, _bi_Remainder)
-	scope.registerBuiltIn("MAXIMUM", "MAX", 2, _bi_Maximum)
-	scope.registerBuiltIn("MINIMUM", "MIN", 2, _bi_Minimum)
+	_bi_Pops(frame, parameters)
 
-	scope.registerBuiltIn("EQUALP", "EQUAL?", 2, _bi_Equalp)
-	scope.registerBuiltIn("IS", "EQUAL?", 2, _bi_Is)
-	scope.registerBuiltIn("NOTEQUALP", "NOTEQUAL?", 2, _bi_NotEqualp)
-	scope.registerBuiltIn("GREATERP", "GREATER?", 2, _bi_Greaterp)
-	scope.registerBuiltIn("LESSP", "LESS?", 2, _bi_Lessp)
-	scope.registerBuiltIn("NUMBERP", "NUMBER?", 1, _bi_Numberp)
-	scope.registerBuiltIn("ZEROP", "ZERO?", 1, _bi_Zerop)
+	if len(ws.rootFrame.vars) > 0 {
+		ws.print("\n")
 
-	scope.registerBuiltIn("RANDOM", "", 0, _bi_Random)
-	scope.registerBuiltIn("RND", "", 1, _bi_Rnd)
-	scope.registerBuiltIn("SQRT", "", 1, _bi_Sqrt)
-	scope.registerBuiltIn("POW", "", 2, _bi_Pow)
-	scope.registerBuiltIn("SIN", "", 1, _bi_Sin)
-	scope.registerBuiltIn("COS", "", 1, _bi_Cos)
-	scope.registerBuiltIn("ARCTAN", "", 1, _bi_Arctan)
+		_bi_Pons(frame, parameters)
+	}
+	return nil, nil
+}
 
-	scope.registerBuiltIn("TEST", "", 1, _bi_Test)
-	scope.registerBuiltIn("IFTRUE", "", 1, _bi_IfTrue)
-	scope.registerBuiltIn("IFFALSE", "", 1, _bi_IfFalse)
+func printVariable(ws *Workspace, n string, v Node) {
+	ws.print("MAKE \"" + n + " ")
+	switch v.(type) {
+	case *WordNode:
+		ws.print("\"")
+	}
+	printNode(ws, v, true)
+	ws.print("\n")
+}
 
-	scope.registerBuiltIn("MAKE", "", 2, _bi_Make)
-	scope.registerBuiltIn("THING", "", 1, _bi_Thing)
-	scope.registerBuiltIn("LOCAL", "", 1, _bi_Local)
+func printTitle(ws *Workspace, p *InterpretedProcedure) {
 
-	scope.registerBuiltIn("WORD", "", 2, _bi_Word)
-	scope.registerBuiltIn("SENTENCE", "SE", 2, _bi_Sentence)
-	scope.registerBuiltIn("LIST", "", 2, _bi_List)
-	scope.registerBuiltIn("FPUT", "", 2, _bi_FPut)
-	scope.registerBuiltIn("LPUT", "", 2, _bi_LPut)
-	scope.registerBuiltIn("FIRST", "", 1, _bi_First)
-	scope.registerBuiltIn("LAST", "", 1, _bi_Last)
-	scope.registerBuiltIn("BUTFIRST", "", 1, _bi_ButFirst)
-	scope.registerBuiltIn("BUTLAST", "", 1, _bi_ButLast)
+	ws.print("TO ")
+	ws.print(p.name)
 
-	scope.registerBuiltIn("COUNT", "", 1, _bi_Count)
-	scope.registerBuiltIn("EMPTYP", "", 1, _bi_Emptyp)
-	scope.registerBuiltIn("WORDP", "", 1, _bi_Wordp)
-	scope.registerBuiltIn("SENTENCEP", "", 1, _bi_Sentencep)
-	scope.registerBuiltIn("MEMBERP", "", 2, _bi_Memberp)
-	scope.registerBuiltIn("ITEM", "NTH", 2, _bi_Item)
+	for _, i := range p.parameters {
+		ws.print(" :")
+		ws.print(i)
+	}
+	ws.print("\n")
+}
 
-	scope.registerBuiltIn("BOTH", "AND", 2, _bi_Both)
-	scope.registerBuiltIn("EITHER", "OR", 2, _bi_Either)
-	scope.registerBuiltIn("NOT", "", 1, _bi_Not)
+func toWordList(node Node) ([]*WordNode, error) {
+	names := make([]*WordNode, 0, 1)
+	switch n := node.(type) {
+	case *WordNode:
+		names = append(names, n)
+	case *ListNode:
+		for nn := n.firstChild; nn != nil; nn = nn.next() {
+			switch wn := nn.(type) {
+			case *WordNode:
+				names = append(names, wn)
+			case *ListNode:
+				return nil, errorWordExpected(wn)
+			}
+		}
+	}
+	return names, nil
+}
 
-	scope.registerBuiltIn("TRACE", "", 0, _bi_Trace)
-	scope.registerBuiltIn("UNTRACE", "", 0, _bi_Untrace)
-	scope.registerBuiltIn("GOODBYE", "BYE", 0, _bi_Goodbye)
-	scope.registerBuiltIn("WAIT", "", 1, _bi_Wait)
+func _bi_Pon(frame Frame, parameters []Node) (Node, error) {
 
-	scope.registerBuiltIn("RUN", "", 1, _bi_Run)
-	return scope
+	names, err := toWordList(parameters[0])
+	if err != nil {
+		return nil, err
+	}
+
+	ws := frame.workspace()
+	for _, n := range names {
+		name := strings.ToUpper(n.value)
+		v, exists := ws.rootFrame.vars[name]
+		if exists && !v.buried {
+			printVariable(ws, name, v.value)
+		}
+	}
+
+	return nil, nil
+}
+
+func _bi_Pons(frame Frame, parameters []Node) (Node, error) {
+
+	ws := frame.workspace()
+
+	for n, v := range ws.rootFrame.vars {
+		if !v.buried {
+			printVariable(ws, n, v.value)
+		}
+	}
+
+	return nil, nil
+}
+
+func _bi_Pops(frame Frame, parameters []Node) (Node, error) {
+	ws := frame.workspace()
+
+	for _, p := range ws.procedures {
+		switch ip := p.(type) {
+		case *InterpretedProcedure:
+			if !ip.buried {
+				ws.print(ip.source)
+				ws.print("\n")
+			}
+		}
+	}
+
+	return nil, nil
+}
+
+func _bi_Pots(frame Frame, parameters []Node) (Node, error) {
+	ws := frame.workspace()
+
+	for _, p := range ws.procedures {
+		switch ip := p.(type) {
+		case *InterpretedProcedure:
+			if !ip.buried {
+				printTitle(ws, ip)
+			}
+		}
+	}
+
+	return nil, nil
+}
+
+func _bi_Pot(frame Frame, parameters []Node) (Node, error) {
+
+	names, err := toWordList(parameters[0])
+	if err != nil {
+		return nil, err
+	}
+
+	ws := frame.workspace()
+	for _, n := range names {
+		p := ws.findProcedure(strings.ToUpper(n.value))
+		if p == nil {
+			continue
+		}
+		switch ip := p.(type) {
+		case *InterpretedProcedure:
+			if !ip.buried {
+				printTitle(ws, ip)
+			}
+		}
+	}
+
+	return nil, nil
+}
+
+func _bi_ErAll(frame Frame, parameters []Node) (Node, error) {
+
+	_bi_Erps(frame, parameters)
+
+	_bi_Erns(frame, parameters)
+
+	return nil, nil
+}
+
+func _bi_Erase(frame Frame, parameters []Node) (Node, error) {
+
+	names, err := toWordList(parameters[0])
+	if err != nil {
+		return nil, err
+	}
+
+	ws := frame.workspace()
+	for _, n := range names {
+		name := strings.ToUpper(n.value)
+		p := ws.findProcedure(strings.ToUpper(name))
+		if p == nil {
+			continue
+		}
+		switch ip := p.(type) {
+		case *InterpretedProcedure:
+			if !ip.buried {
+				delete(ws.procedures, name)
+			}
+		}
+	}
+
+	return nil, nil
+}
+
+func _bi_Ern(frame Frame, parameters []Node) (Node, error) {
+
+	names, err := toWordList(parameters[0])
+	if err != nil {
+		return nil, err
+	}
+
+	ws := frame.workspace()
+	for _, n := range names {
+		name := strings.ToUpper(n.value)
+		v, exists := ws.rootFrame.vars[name]
+		if exists && !v.buried {
+			delete(ws.rootFrame.vars, name)
+		}
+	}
+
+	return nil, nil
+}
+
+func _bi_Erns(frame Frame, parameters []Node) (Node, error) {
+
+	ws := frame.workspace()
+
+	for n, v := range ws.rootFrame.vars {
+		if !v.buried {
+			delete(ws.rootFrame.vars, n)
+		}
+	}
+	return nil, nil
+}
+
+func _bi_Erps(frame Frame, parameters []Node) (Node, error) {
+
+	ws := frame.workspace()
+
+	for n, p := range ws.procedures {
+		switch ip := p.(type) {
+		case *InterpretedProcedure:
+			if !ip.buried {
+				delete(ws.procedures, n)
+			}
+		}
+	}
+
+	return nil, nil
+}
+
+func _bi_Bury(frame Frame, parameters []Node) (Node, error) {
+	names, err := toWordList(parameters[0])
+	if err != nil {
+		return nil, err
+	}
+
+	ws := frame.workspace()
+	for _, n := range names {
+		name := strings.ToUpper(n.value)
+		p := ws.findProcedure(strings.ToUpper(name))
+		if p == nil {
+			continue
+		}
+		switch ip := p.(type) {
+		case *InterpretedProcedure:
+			ip.buried = true
+		}
+	}
+
+	return nil, nil
+}
+
+func _bi_BuryAll(frame Frame, parameters []Node) (Node, error) {
+
+	ws := frame.workspace()
+
+	for _, p := range ws.procedures {
+		switch ip := p.(type) {
+		case *InterpretedProcedure:
+			ip.buried = true
+		}
+	}
+
+	for _, v := range ws.rootFrame.vars {
+		v.buried = true
+	}
+	return nil, nil
+}
+
+func _bi_BuryName(frame Frame, parameters []Node) (Node, error) {
+
+	names, err := toWordList(parameters[0])
+	if err != nil {
+		return nil, err
+	}
+
+	ws := frame.workspace()
+	for _, n := range names {
+		name := strings.ToUpper(n.value)
+		v, exists := ws.rootFrame.vars[name]
+		if exists {
+			v.buried = true
+		}
+	}
+
+	return nil, nil
+}
+
+func _bi_Unbury(frame Frame, parameters []Node) (Node, error) {
+	names, err := toWordList(parameters[0])
+	if err != nil {
+		return nil, err
+	}
+
+	ws := frame.workspace()
+	for _, n := range names {
+		name := strings.ToUpper(n.value)
+		p := ws.findProcedure(strings.ToUpper(name))
+		if p == nil {
+			continue
+		}
+		switch ip := p.(type) {
+		case *InterpretedProcedure:
+			ip.buried = false
+		}
+	}
+
+	return nil, nil
+}
+
+func _bi_UnburyAll(frame Frame, parameters []Node) (Node, error) {
+	ws := frame.workspace()
+
+	for _, p := range ws.procedures {
+		switch ip := p.(type) {
+		case *InterpretedProcedure:
+			ip.buried = false
+		}
+	}
+
+	for _, v := range ws.rootFrame.vars {
+		v.buried = false
+	}
+	return nil, nil
+}
+
+func _bi_UnburyName(frame Frame, parameters []Node) (Node, error) {
+	names, err := toWordList(parameters[0])
+	if err != nil {
+		return nil, err
+	}
+
+	ws := frame.workspace()
+	for _, n := range names {
+		name := strings.ToUpper(n.value)
+		v, exists := ws.rootFrame.vars[name]
+		if exists {
+			v.buried = false
+		}
+	}
+
+	return nil, nil
+}
+
+func _bi_Load(frame Frame, parameters []Node) (Node, error) {
+
+	name, err := evalToWord(parameters[0])
+	if err != nil {
+		return nil, err
+	}
+
+	ws := frame.workspace()
+	err = ws.files.OpenFile(name)
+	if err != nil {
+		return nil, err
+	}
+
+	err = ws.files.SetReader(name)
+	if err != nil {
+		return nil, err
+	}
+	defer ws.files.CloseFile(name)
+
+	err = ws.readFile()
+	if err != nil && err != io.EOF {
+		return nil, err
+	}
+
+	return nil, nil
+}
+
+func _bi_Save(frame Frame, parameters []Node) (Node, error) {
+
+	name, err := evalToWord(parameters[0])
+	if err != nil {
+		return nil, err
+	}
+
+	ws := frame.workspace()
+	err = ws.files.OpenFile(name)
+	if err != nil {
+		return nil, err
+	}
+
+	err = ws.files.SetWriter(name)
+	if err != nil {
+		return nil, err
+	}
+	defer ws.files.CloseFile(name)
+
+	return _bi_PoAll(frame, parameters)
+}
+
+func _bi_Savel(frame Frame, parameters []Node) (Node, error) {
+
+	names, err := toWordList(parameters[0])
+	if err != nil {
+		return nil, err
+	}
+
+	name, err := evalToWord(parameters[1])
+	if err != nil {
+		return nil, err
+	}
+
+	ws := frame.workspace()
+	err = ws.files.OpenFile(name)
+	if err != nil {
+		return nil, err
+	}
+
+	err = ws.files.SetWriter(name)
+	if err != nil {
+		return nil, err
+	}
+	defer ws.files.CloseFile(name)
+
+	for _, n := range names {
+		p := ws.findProcedure(strings.ToUpper(n.value))
+		if p == nil {
+			continue
+		}
+		switch ip := p.(type) {
+		case *InterpretedProcedure:
+			if !ip.buried {
+				ws.print(ip.source)
+				ws.print("\n")
+			}
+		}
+	}
+
+	return _bi_Pons(frame, parameters)
+}
+
+func registerBuiltInProcedures(workspace *Workspace) {
+
+	workspace.registerBuiltIn("OUTPUT", "OP", 1, _bi_Output)
+	workspace.registerBuiltIn("STOP", "", 0, _bi_Output)
+
+	workspace.registerBuiltIn("PRINT", "PR", 1, _bi_Print)
+	workspace.registerBuiltIn("FPRINT", "FP", 1, _bi_FPrint)
+	workspace.registerBuiltIn("TYPE", "TY", 1, _bi_Type)
+	workspace.registerBuiltIn("FTYPE", "FTY", 1, _bi_FType)
+
+	workspace.registerBuiltIn("READLIST", "RL", 0, _bi_ReadList)
+	workspace.registerBuiltIn("REQUEST", "", 0, _bi_Request)
+
+	workspace.registerBuiltIn("REPEAT", "", 2, _bi_Repeat)
+	workspace.registerBuiltIn("IF", "", 2, _bi_If)
+	workspace.registerBuiltIn("IFELSE", "", 3, _bi_IfElse)
+
+	workspace.registerBuiltIn("SUM", "", 2, _bi_Sum)
+	workspace.registerBuiltIn("DIFFERENCE", "DIFF", 2, _bi_Difference)
+	workspace.registerBuiltIn("PRODUCT", "", 2, _bi_Product)
+	workspace.registerBuiltIn("QUOTIENT", "", 2, _bi_Quotient)
+	workspace.registerBuiltIn("REMAINDER", "MOD", 2, _bi_Remainder)
+	workspace.registerBuiltIn("MAXIMUM", "MAX", 2, _bi_Maximum)
+	workspace.registerBuiltIn("MINIMUM", "MIN", 2, _bi_Minimum)
+
+	workspace.registerBuiltIn("EQUALP", "EQUAL?", 2, _bi_Equalp)
+	workspace.registerBuiltIn("IS", "EQUAL?", 2, _bi_Is)
+	workspace.registerBuiltIn("NOTEQUALP", "NOTEQUAL?", 2, _bi_NotEqualp)
+	workspace.registerBuiltIn("GREATERP", "GREATER?", 2, _bi_Greaterp)
+	workspace.registerBuiltIn("LESSP", "LESS?", 2, _bi_Lessp)
+	workspace.registerBuiltIn("GREATEREQUALP", "GREATERQUAL?", 2, _bi_GreaterEqualp)
+	workspace.registerBuiltIn("LESSEQUALP", "LESSEQUAL?", 2, _bi_LessEqualp)
+	workspace.registerBuiltIn("NUMBERP", "NUMBER?", 1, _bi_Numberp)
+	workspace.registerBuiltIn("ZEROP", "ZERO?", 1, _bi_Zerop)
+
+	workspace.registerBuiltIn("RANDOM", "", 0, _bi_Random)
+	workspace.registerBuiltIn("RND", "", 1, _bi_Rnd)
+	workspace.registerBuiltIn("SQRT", "", 1, _bi_Sqrt)
+	workspace.registerBuiltIn("POW", "", 2, _bi_Pow)
+	workspace.registerBuiltIn("SIN", "", 1, _bi_Sin)
+	workspace.registerBuiltIn("COS", "", 1, _bi_Cos)
+	workspace.registerBuiltIn("ARCTAN", "", 1, _bi_Arctan)
+
+	workspace.registerBuiltIn("TEST", "", 1, _bi_Test)
+	workspace.registerBuiltIn("IFTRUE", "", 1, _bi_IfTrue)
+	workspace.registerBuiltIn("IFFALSE", "", 1, _bi_IfFalse)
+
+	workspace.registerBuiltIn("MAKE", "", 2, _bi_Make)
+	workspace.registerBuiltIn("THING", "", 1, _bi_Thing)
+	workspace.registerBuiltIn("LOCAL", "", 1, _bi_Local)
+
+	workspace.registerBuiltIn("WORD", "", 2, _bi_Word)
+	workspace.registerBuiltIn("SENTENCE", "SE", 2, _bi_Sentence)
+	workspace.registerBuiltIn("LIST", "", 2, _bi_List)
+	workspace.registerBuiltIn("FPUT", "", 2, _bi_FPut)
+	workspace.registerBuiltIn("LPUT", "", 2, _bi_LPut)
+	workspace.registerBuiltIn("FIRST", "", 1, _bi_First)
+	workspace.registerBuiltIn("LAST", "", 1, _bi_Last)
+	workspace.registerBuiltIn("BUTFIRST", "", 1, _bi_ButFirst)
+	workspace.registerBuiltIn("BUTLAST", "", 1, _bi_ButLast)
+
+	workspace.registerBuiltIn("COUNT", "", 1, _bi_Count)
+	workspace.registerBuiltIn("EMPTYP", "", 1, _bi_Emptyp)
+	workspace.registerBuiltIn("WORDP", "", 1, _bi_Wordp)
+	workspace.registerBuiltIn("SENTENCEP", "", 1, _bi_Sentencep)
+	workspace.registerBuiltIn("MEMBERP", "", 2, _bi_Memberp)
+	workspace.registerBuiltIn("ITEM", "NTH", 2, _bi_Item)
+
+	workspace.registerBuiltIn("BOTH", "AND", 2, _bi_Both)
+	workspace.registerBuiltIn("EITHER", "OR", 2, _bi_Either)
+	workspace.registerBuiltIn("NOT", "", 1, _bi_Not)
+
+	workspace.registerBuiltIn("TRACE", "", 0, _bi_Trace)
+	workspace.registerBuiltIn("UNTRACE", "", 0, _bi_Untrace)
+	workspace.registerBuiltIn("GOODBYE", "BYE", 0, _bi_Goodbye)
+	workspace.registerBuiltIn("WAIT", "", 1, _bi_Wait)
+
+	workspace.registerBuiltIn("RUN", "", 1, _bi_Run)
+
+	workspace.registerBuiltIn("PO", "", 1, _bi_Po)
+	workspace.registerBuiltIn("POALL", "", 0, _bi_PoAll)
+	workspace.registerBuiltIn("PON", "", 1, _bi_Pon)
+	workspace.registerBuiltIn("PONS", "", 0, _bi_Pons)
+	workspace.registerBuiltIn("POPS", "", 0, _bi_Pops)
+	workspace.registerBuiltIn("POT", "", 1, _bi_Pot)
+	workspace.registerBuiltIn("POTS", "", 0, _bi_Pots)
+
+	workspace.registerBuiltIn("ERALL", "", 0, _bi_ErAll)
+	workspace.registerBuiltIn("ERASE", "", 1, _bi_Erase)
+	workspace.registerBuiltIn("ERN", "", 1, _bi_Ern)
+	workspace.registerBuiltIn("ERNS", "", 0, _bi_Erns)
+	workspace.registerBuiltIn("ERPS", "", 0, _bi_Erps)
+
+	workspace.registerBuiltIn("BURY", "", 1, _bi_Bury)
+	workspace.registerBuiltIn("BURYALL", "", 0, _bi_BuryAll)
+	workspace.registerBuiltIn("BURYNAME", "", 1, _bi_BuryName)
+	workspace.registerBuiltIn("UNBURY", "", 1, _bi_Unbury)
+	workspace.registerBuiltIn("UNBURYALL", "", 0, _bi_UnburyAll)
+	workspace.registerBuiltIn("UNBURYNAME", "", 1, _bi_UnburyName)
+
+	workspace.registerBuiltIn("LOAD", "", 1, _bi_Load)
+	workspace.registerBuiltIn("SAVE", "", 1, _bi_Save)
+	workspace.registerBuiltIn("SAVEL", "", 2, _bi_Savel)
 }

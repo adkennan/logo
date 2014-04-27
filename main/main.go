@@ -1,49 +1,30 @@
 package main
 
 import (
-	"bufio"
-	"fmt"
+	"github.com/adkennan/Go-SDL/sdl"
 	"github.com/adkennan/logo"
-	"os"
 )
+
+func runEventLoop(ws *logo.Workspace) {
+
+	s := ws.Screen()
+	for {
+		sdl.Delay(20)
+
+		s.Update()
+	}
+}
 
 func main() {
 
-	source := ` 
-
-TO fib :n 
-	MAKE "a 0
-	MAKE "b 1
-	REPEAT :n [
-		MAKE "c :a
-		MAKE "a :b
-		MAKE "b SUM :b :c
-
-		PRINT :a
-	]
-END
-
-TO blah :n 
-	IFELSE EQUALP :n 1 [	
-		PRINT "BLAH
-	] [
-		TYPE "BLAH\ 
-		BLAH DIFFERENCE :n 1
-	]
-END
-`
-	scope, err := logo.ParseNonInteractiveScope(logo.CreateBuiltInScope(), source)
-	if err != nil {
-		panic(err)
+	if sdl.Init(sdl.INIT_EVERYTHING) != 0 {
+		panic(sdl.GetError())
 	}
+	defer sdl.Quit()
 
-	bio := bufio.NewReader(os.Stdin)
-	for {
-		fmt.Print("? ")
-		line, _, err := bio.ReadLine()
-		err = logo.Evaluate(scope, string(line))
-		if err != nil {
-			fmt.Println(err)
-		}
-	}
+	ws := logo.CreateWorkspace()
+
+	go runEventLoop(ws)
+
+	ws.RunInterpreter()
 }

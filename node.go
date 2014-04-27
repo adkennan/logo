@@ -32,6 +32,7 @@ type WordNode struct {
 	BaseNode
 	value     string
 	isLiteral bool
+	isInfix   bool
 }
 
 func newWordNode(line, col int, value string, isLiteral bool) Node {
@@ -59,7 +60,9 @@ func (this *WordNode) String() string {
 }
 
 func (this *WordNode) clone() Node {
-	return newWordNode(this.line, this.col, this.value, this.isLiteral)
+	n := newWordNode(this.line, this.col, this.value, this.isLiteral).(*WordNode)
+	n.isInfix = this.isInfix
+	return n
 }
 
 type ListNode struct {
@@ -117,22 +120,22 @@ func (this *ListNode) clone() Node {
 	return newListNode(this.line, this.col, fn)
 }
 
-func printNode(n Node, includeBrackets bool) {
+func printNode(ws *Workspace, n Node, includeBrackets bool) {
 
 	switch pn := n.(type) {
 	case *WordNode:
-		Print(pn.value)
+		ws.print(pn.value)
 
 	case *ListNode:
 		if includeBrackets {
-			Print("[ ")
+			ws.print("[ ")
 		}
 		for nn := pn.firstChild; nn != nil; nn = nn.next() {
-			printNode(nn, true)
-			Print(" ")
+			printNode(ws, nn, true)
+			ws.print(" ")
 		}
 		if includeBrackets {
-			Print("]")
+			ws.print("]")
 		}
 	}
 }

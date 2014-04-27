@@ -6,12 +6,7 @@ import (
 )
 
 func toError(code int, node Node, message string) error {
-	if node != nil {
-		line, col := node.position()
-		return errors.New(fmt.Sprintf("%000d: (%d, %d), %s", code, line, col, message))
-	}
-	err := errors.New(fmt.Sprintf("%000d: %s", code, message))
-	return err
+	return errors.New(message)
 }
 
 func errorKeywordExpected(node Node, keyword string) error {
@@ -34,8 +29,8 @@ func errorProcedureExpected(node Node) error {
 	return toError(5, node, "Procedure expected.")
 }
 
-func errorNotEnoughParameters(node Node) error {
-	return toError(6, node, "Not enough inputs.")
+func errorNotEnoughParameters(caller *WordNode, node Node) error {
+	return toError(6, node, "Not enough inputs to "+caller.value+".")
 }
 
 func errorNumberExpected(node Node) error {
@@ -68,4 +63,12 @@ func errorReturnValueUnused(node Node, value Node) error {
 
 func errorBadInput(value Node) error {
 	return toError(14, value, "I don't like "+value.String()+" as an input.")
+}
+
+func errorFileNotOpen(name string) error {
+	return toError(15, nil, "File "+name+" is not open.")
+}
+
+func errorListOfNItemsExpected(node Node, n int) error {
+	return toError(16, node, "Expected list of "+fmt.Sprint(n)+" items.")
 }

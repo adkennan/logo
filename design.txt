@@ -1,0 +1,45 @@
+
+Parsing
+=======
+
+Input string is broken up into Nodes. A Node can be a WordNode or a ListNode.
+
+A WordNode contains a value such as a name, a number or a string.
+
+A ListNode contains zero or more other Nodes.
+
+Procedures
+==========
+
+Procedures have a fixed number of Inputs and may return an Output. Inputs and Outputs are represented by Nodes.
+
+There are two types of procedures. 
+
+BuiltInProcedure is implemented by a go function with a signature of func(frame Frame, parameters []Node) (returnValue Node, err error).
+
+InterpretedProcedure is a collection of Nodes to be interpreted when called. The Output returned is set using the OUTPUT command.
+
+Frames
+======
+
+A Frames describes the context of execution. It stores local variables and collects the return value from the current Procedure. Frames are organized into a hierarchy. Each Procedure call creates a new Frame with the calling Frame as its parent.
+
+A BuiltInFrame represents the execution context of a BuiltInProcedure.
+
+An InterpretedFrame represents the execution context of an InterpretedProcedure.
+
+An RootFrame represents the execution context of a collection of Nodes read directly from a File. There is only one RootFrame within a Workspace. It is used to interpret commands entered by the user at the command prompt, loaded from a File or created in the Editor.
+
+Variables
+=========
+
+A Variable is a named value. The value can be any Node. 
+
+By default Variables created by the MAKE command are global in scope. The LOCAL command creates a variable within the scope of the current Frame and any of its child Frames.
+
+Workspace
+=========
+
+The Workspace is the container for all Logo objects. It contains the RootFrame, Procedures, Files, global Variables and the current state of the Screen and Turtle.
+
+

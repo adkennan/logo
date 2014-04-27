@@ -16,6 +16,7 @@ const newLine rune = '\n'
 const thingStart rune = ':'
 
 var wordSeparators = []rune{' ', '\t', newLine, comment, listEnd}
+var infixOpChars = []rune{'+', '-', '*', '/', '<', '>', '=', '(', ')'}
 var listSeparators = []rune{' ', '\t', newLine, comment}
 
 func ParseString(text string) (n Node, err error) {
@@ -95,6 +96,15 @@ func isSeparator(c rune, nt NodeType) bool {
 	return false
 }
 
+func isOperator(c rune) bool {
+	for _, s := range infixOpChars {
+		if s == c {
+			return true
+		}
+	}
+	return false
+}
+
 func checkNewline(c rune, line, col *int) {
 	if c == newLine {
 		(*line)++
@@ -144,9 +154,6 @@ func readList(r *bufio.Reader, line, col *int) (n Node, err error) {
 		if nn != nil {
 			if pn != nil {
 				pn.addNode(nn)
-				for nn.next() != nil {
-					nn = nn.next()
-				}
 			}
 			pn = nn
 			if fn == nil {
@@ -183,6 +190,21 @@ func readList(r *bufio.Reader, line, col *int) (n Node, err error) {
 	return nil, err
 }
 
+func isNegativeNumber(pc, c rune, r *bufio.Reader) bool {
+
+	if c != '-' {
+		return false
+	}
+
+	if pc != 0 && !isSeparator(pc, Word) {
+		return false
+	}
+
+	nc, _, _ := r.ReadRune()
+	r.UnreadRune()
+	return unicode.IsDigit(nc)
+}
+
 func readWord(r *bufio.Reader, line, col *int) (n Node, err error) {
 
 	r.UnreadRune()
@@ -190,36 +212,61 @@ func readWord(r *bufio.Reader, line, col *int) (n Node, err error) {
 	chars := make([]rune, 0, 4)
 	escaped := false
 	isLiteral := false
+	var pc rune
 
 	for {
 		c, _, err := r.ReadRune()
 		if err != nil {
 			break
 		}
+		if !escaped && isOperator(c) && !isNegativeNumber(pc, c, r) {
+			if len(chars) == 0 {
+				chars = append(chars, c)
+				if c == '<' || c == '>' {
+					nc, _, err := r.ReadRune()
+					if err != nil {
+						break
+					}
+					if (c == '<' && (nc == '>' || nc == '=')) ||
+						(c == '>' && nc == '=') {
+						chars = append(chars, nc)
 
-		if len(chars) == 0 && (c == literalStart || unicode.IsDigit(c)) {
-
-			isLiteral = true
-		}
-
-		checkNewline(c, line, col)
-
-		if !escaped {
-			if isSeparator(c, Word) {
+					} else {
+						r.UnreadRune()
+					}
+					break
+				}
+			} else {
 				r.UnreadRune()
 				break
 			}
-
-			if c == escape {
-				escaped = true
-				continue
-			}
 		} else {
-			escaped = false
-		}
 
-		if len(chars) > 0 || c != literalStart {
-			chars = append(chars, c)
+			if len(chars) == 0 && (c == literalStart || unicode.IsDigit(c) || c == '-') {
+
+				isLiteral = true
+			}
+
+			checkNewline(c, line, col)
+
+			if !escaped {
+				if isSeparator(c, Word) {
+					r.UnreadRune()
+					break
+				}
+
+				if c == escape {
+					escaped = true
+					continue
+				}
+			} else {
+				escaped = false
+			}
+
+			if len(chars) > 0 || c != literalStart {
+				chars = append(chars, c)
+				pc = c
+			}
 		}
 	}
 
