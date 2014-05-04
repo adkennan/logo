@@ -1,4 +1,4 @@
-package logo
+package main
 
 import (
 	"os"
@@ -18,6 +18,8 @@ type Workspace struct {
 	files        *Files
 	screen       *Screen
 	turtle       *Turtle
+	glyphMap     *GlyphMap
+	console      *ConsoleScreen
 }
 
 func CreateWorkspace() *Workspace {
@@ -25,15 +27,19 @@ func CreateWorkspace() *Workspace {
 	if err != nil {
 		panic(err)
 	}
-	ws := &Workspace{nil, make(map[string]Procedure, 100), false, nil, nil, nil}
+	ws := &Workspace{nil, make(map[string]Procedure, 100), false, nil, nil, nil, nil, nil}
 	ws.rootFrame = &RootFrame{ws, nil, nil, make(map[string]*Variable, 10)}
 	ws.files = CreateFiles(path.Join(u.HomeDir, "logo"))
 	registerBuiltInProcedures(ws)
 
-	ws.screen = initScreen(ws, 800, 600)
+	ws.screen = initScreen(ws)
 	ws.turtle = initTurtle(ws)
-	initTurtle(ws)
+	ws.glyphMap = initGlyphMap()
+	ws.console = initConsole(ws, ws.screen.screen.W(), ws.screen.screen.H())
 
+	ws.files.defaultFile = ws.console
+	ws.files.writer = ws.console
+	ws.files.reader = ws.console
 	return ws
 }
 

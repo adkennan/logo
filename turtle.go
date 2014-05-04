@@ -1,4 +1,4 @@
-package logo
+package main
 
 import (
 	"image/color"
@@ -15,8 +15,10 @@ const (
 	turtleStateHidden
 )
 
+const turtleSize = 16
+
 var (
-	colorBlack = color.RGBA{0, 0, 0, 255}
+	colorBlack = color.RGBA{0, 0, 0, 0xff}
 	colorWhite = color.RGBA{0xff, 0xff, 0xff, 0xff}
 )
 
@@ -33,6 +35,7 @@ type Turtle struct {
 	screenColor color.RGBA
 	floodColor  color.RGBA
 	ws          *Workspace
+	sprite      Surface
 }
 
 func (this *Turtle) onDrawLine(x1, y1, x2, y2 int64) {
@@ -43,9 +46,31 @@ func (this *Turtle) onStateChanged() {
 	this.ws.screen.StateChanged()
 }
 
+func (this *Turtle) updateSprite() {
+
+	t := this
+	d := normAngle(t.d)
+	x1 := int(turtleSize - (5 * math.Cos((d-90)*dToR)))
+	y1 := int(turtleSize - (5 * math.Sin((d-90)*dToR)))
+	x2 := int(turtleSize - (5 * math.Cos((d+90)*dToR)))
+	y2 := int(turtleSize - (5 * math.Sin((d+90)*dToR)))
+	x3 := int(turtleSize - (10 * math.Cos(d*dToR)))
+	y3 := int(turtleSize - (10 * math.Sin(d*dToR)))
+
+	r := this.sprite
+	r.Clear()
+	r.SetColor(colorWhite)
+	r.DrawLine(x1, y1, x2, y2)
+	r.DrawLine(x2, y2, x3, y3)
+	r.DrawLine(x3, y3, x1, y1)
+}
+
 func initTurtle(ws *Workspace) *Turtle {
 	turtle := &Turtle{
-		0, 0, 0, 1.0, turtleStateShown, penStateDown, penModePaint, colorWhite, colorBlack, colorWhite, ws}
+		0, 0, 0, 1.0, turtleStateShown, penStateDown, penModePaint, colorWhite, colorBlack, colorWhite, ws, nil}
+
+	turtle.sprite = ws.screen.screen.CreateSurface(turtleSize*2, turtleSize*2)
+	turtle.updateSprite()
 
 	ws.registerBuiltIn("FORWARD", "FD", 1, _t_Forward)
 	ws.registerBuiltIn("BACK", "BK", 1, _t_Back)
@@ -142,6 +167,8 @@ func _t_Left(frame Frame, parameters []Node) (Node, error) {
 		t.d += 360
 	}
 
+	t.updateSprite()
+
 	t.onStateChanged()
 	return nil, nil
 }
@@ -158,6 +185,8 @@ func _t_Right(frame Frame, parameters []Node) (Node, error) {
 	for t.d >= 360 {
 		t.d -= 360
 	}
+
+	t.updateSprite()
 
 	t.onStateChanged()
 	return nil, nil
@@ -214,6 +243,8 @@ func _t_Home(frame Frame, parameters []Node) (Node, error) {
 	t.y = 0
 	t.d = 0
 
+	t.updateSprite()
+
 	t.onStateChanged()
 	return nil, nil
 }
@@ -230,6 +261,8 @@ func _t_SetHeading(frame Frame, parameters []Node) (Node, error) {
 	for t.d >= 360 {
 		t.d -= 360
 	}
+
+	t.updateSprite()
 
 	t.onStateChanged()
 	return nil, nil

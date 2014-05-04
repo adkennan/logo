@@ -1,4 +1,4 @@
-package logo
+package main
 
 import (
 	"io"

@@ -1,6 +1,7 @@
-package logo
+package main
 
 import (
+	"bytes"
 	"fmt"
 	"strconv"
 	"strings"
@@ -121,21 +122,29 @@ func (this *ListNode) clone() Node {
 }
 
 func printNode(ws *Workspace, n Node, includeBrackets bool) {
+	buf := &bytes.Buffer{}
+
+	nodeToText(buf, n, includeBrackets)
+
+	ws.print(buf.String())
+}
+
+func nodeToText(buf *bytes.Buffer, n Node, includeBrackets bool) {
 
 	switch pn := n.(type) {
 	case *WordNode:
-		ws.print(pn.value)
+		buf.WriteString(pn.value)
 
 	case *ListNode:
 		if includeBrackets {
-			ws.print("[ ")
+			buf.WriteString("[ ")
 		}
 		for nn := pn.firstChild; nn != nil; nn = nn.next() {
-			printNode(ws, nn, true)
-			ws.print(" ")
+			nodeToText(buf, nn, true)
+			buf.WriteString(" ")
 		}
 		if includeBrackets {
-			ws.print("]")
+			buf.WriteString("]")
 		}
 	}
 }

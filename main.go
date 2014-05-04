@@ -2,17 +2,37 @@ package main
 
 import (
 	"github.com/adkennan/Go-SDL/sdl"
-	"github.com/adkennan/logo"
+	"runtime"
 )
 
-func runEventLoop(ws *logo.Workspace) {
+func init() {
+	runtime.LockOSThread()
+}
+
+func runEventLoop(ws *Workspace) {
 
 	s := ws.Screen()
-	for {
-		sdl.Delay(20)
 
+	sdl.EnableUNICODE(1)
+
+	running := true
+	for running {
+		for event := sdl.PollEvent(); event != nil; event = sdl.PollEvent() {
+			switch e := event.(type) {
+			case *sdl.QuitEvent:
+				running = false
+			case *sdl.KeyboardEvent:
+				if e.Type == sdl.KEYDOWN {
+					ws.console.Input() <- &e.Keysym
+				}
+			}
+		}
 		s.Update()
+		sdl.Delay(20)
 	}
+}
+
+func init() {
 }
 
 func main() {
@@ -22,9 +42,11 @@ func main() {
 	}
 	defer sdl.Quit()
 
-	ws := logo.CreateWorkspace()
+	ws := CreateWorkspace()
+	defer ws.Screen().Close()
 
-	go runEventLoop(ws)
+	go ws.RunInterpreter()
 
-	ws.RunInterpreter()
+	runEventLoop(ws)
+
 }
