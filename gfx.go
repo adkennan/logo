@@ -3,17 +3,98 @@ package main
 import (
 	"github.com/adkennan/Go-SDL/gfx"
 	"github.com/adkennan/Go-SDL/sdl"
+	"github.com/adkennan/Go-SDL/ttf"
 	"image/color"
+	"unicode/utf16"
 )
+
+var normalFontName string = "res/DejaVuSansMono.ttf"
+var boldFontName string = "res/DejaVuSansMono-Bold.ttf"
+
+const (
+	glyphStyleNormal  = 0x01
+	glyphStyleBold    = 0x02
+	glyphStyleInverse = 0x04
+
+	fontSize = 24
+)
+
+type GlyphMap struct {
+	fonts      []*ttf.Font
+	glyphs     map[int]map[rune]*sdlSurface
+	charHeight int
+	charWidth  int
+}
+
+var textColFg sdl.Color = sdl.Color{0xFF, 0xFF, 0xFF, 0xFF}
+var textColBg sdl.Color = sdl.Color{0x00, 0x00, 0x00, 0xFF}
+
+func initGlyphMap() *GlyphMap {
+
+	ttf.Init()
+
+	fs := []*ttf.Font{
+		ttf.OpenFont(normalFontName, fontSize),
+		ttf.OpenFont(boldFontName, fontSize)}
+
+	gm := &GlyphMap{fs, make(map[int]map[rune]*sdlSurface), fs[0].Height(), 0}
+
+	g := gm.getGlyph('e', glyphStyleNormal)
+	gm.charWidth = int(g.W())
+
+	return gm
+}
+
+func (this *GlyphMap) getGlyph(c rune, glyphStyle int) Surface {
+
+	gm, exists := this.glyphs[glyphStyle]
+	if !exists {
+		gm = make(map[rune]*sdlSurface, 30)
+		this.glyphs[glyphStyle] = gm
+	}
+
+	g, exists := gm[c]
+	if !exists {
+		fgc := textColFg
+		bgc := textColBg
+		if (glyphStyle & glyphStyleInverse) == glyphStyleInverse {
+			fgc = textColBg
+			bgc = textColFg
+		}
+
+		s := string([]rune{c})
+		var gs *sdl.Surface
+		if (glyphStyle & glyphStyleNormal) == glyphStyleNormal {
+			gs = ttf.RenderUTF8_Shaded(this.fonts[0], s, fgc, bgc)
+		} else {
+			gs = ttf.RenderUTF8_Shaded(this.fonts[1], s, fgc, bgc)
+		}
+		g = &sdlSurface{gs, int(gs.W), int(gs.H), color.RGBA{0, 0, 0, 0}}
+		gm[c] = g
+	}
+
+	return g
+}
+
+func (this *GlyphMap) renderGlyph(c rune, glyphStyle int, dst Surface, x, y int) int {
+	g := this.getGlyph(c, glyphStyle)
+
+	dst.DrawSurface(x, y, g)
+
+	return x + int(g.W())
+}
 
 type Window interface {
 	CreateSurface(w, h int) Surface
 	DrawSurface(x, y int, sfc Surface)
 	DrawSurfacePart(dx, dy int, sfc Surface, sx, sy, sw, sh int)
 	Clear(c color.Color)
+	ClearRect(c color.Color, x, y, w, h int)
 	Update()
 	W() int
 	H() int
+	SetClipRect(x, y, w, h int)
+	ClearClipRect()
 }
 
 type Surface interface {
@@ -30,6 +111,7 @@ type Surface interface {
 }
 
 type sdlWindow struct {
+	b    *MessageBroker
 	win  *sdl.Surface
 	w, h int
 }
@@ -46,6 +128,14 @@ func (this *sdlWindow) CreateSurface(w, h int) Surface {
 		0xff000000)
 
 	return &sdlSurface{s, w, h, color.RGBA{0, 0, 0, 255}}
+}
+
+func (this *sdlWindow) SetClipRect(x, y, w, h int) {
+	this.win.SetClipRect(&sdl.Rect{int16(x), int16(y), uint16(w), uint16(h)})
+}
+
+func (this *sdlWindow) ClearClipRect() {
+	this.win.SetClipRect(nil)
 }
 
 func (this *sdlWindow) DrawSurface(x, y int, sfc Surface) {
@@ -76,6 +166,11 @@ func (this *sdlWindow) Clear(c color.Color) {
 	this.win.FillRect(nil, toSdlColor(this.win.Format, c))
 }
 
+func (this *sdlWindow) ClearRect(c color.Color, x, y, w, h int) {
+
+	this.win.FillRect(&sdl.Rect{int16(x), int16(y), uint16(w), uint16(h)}, toSdlColor(this.win.Format, c))
+}
+
 func (this *sdlWindow) Close() {
 }
 
@@ -92,7 +187,40 @@ func (this *sdlWindow) H() int {
 	return this.h
 }
 
-func newWindow() Window {
+func (this *sdlWindow) runEventLoop() {
+
+	sdl.EnableUNICODE(1)
+
+	running := true
+	for running {
+		for event := sdl.PollEvent(); event != nil; event = sdl.PollEvent() {
+			switch e := event.(type) {
+			case *sdl.QuitEvent:
+				running = false
+			case *sdl.KeyboardEvent:
+				if e.Type == sdl.KEYDOWN {
+					var r rune
+					if e.Keysym.Unicode != 0 {
+						rs := utf16.Decode([]uint16{e.Keysym.Unicode})
+						r = rs[0]
+					}
+					m := &KeyMessage{MessageBase{MT_KeyPress}, e.Keysym.Sym, r}
+					this.b.Publish(m)
+				}
+			}
+		}
+		sdl.Delay(20)
+	}
+
+	this.b.PublishId(MT_Quit)
+	sdl.Quit()
+}
+
+func newWindow(broker *MessageBroker) Window {
+
+	if sdl.Init(sdl.INIT_EVERYTHING) != 0 {
+		panic(sdl.GetError())
+	}
 
 	i := sdl.GetVideoInfo()
 	w := int(i.Current_w)
@@ -104,7 +232,9 @@ func newWindow() Window {
 
 	sdl.ShowCursor(0)
 
-	win := &sdlWindow{s, w, h}
+	win := &sdlWindow{broker, s, w, h}
+
+	go win.runEventLoop()
 
 	return win
 }

@@ -754,7 +754,7 @@ func _bi_Goodbye(frame Frame, parameters []Node) (Node, error) {
 
 	frame.workspace().print("Seeya!\n\n")
 
-	frame.workspace().exit()
+	frame.workspace().broker.PublishId(MT_Quit)
 
 	return nil, nil
 }

@@ -1,98 +1,38 @@
 package main
 
 import (
-	//	"fmt"
-	//"github.com/adkennan/Go-SDL/gfx"
-	"github.com/adkennan/Go-SDL/sdl"
-	"github.com/adkennan/Go-SDL/ttf"
 	"image/color"
 	"unicode"
-	"unicode/utf16"
 )
 
-var normalFontName string = "res/DejaVuSansMono.ttf"
-var boldFontName string = "res/DejaVuSansMono-Bold.ttf"
+type KeyMessage struct {
+	MessageBase
+	Sym  uint32
+	Char rune
+}
 
 const (
-	glyphStyleNormal  = 0x01
-	glyphStyleBold    = 0x02
-	glyphStyleInverse = 0x04
-
-	fontSize = 24
+	K_RETURN    = 0xd
+	K_BACKSPACE = 0x8
+	K_DELETE    = 0x7f
+	K_UP        = 0x111
+	K_DOWN      = 0x112
+	K_RIGHT     = 0x113
+	K_LEFT      = 0x114
+	K_INSERT    = 0x115
+	K_HOME      = 0x116
+	K_END       = 0x117
+	K_PAGEUP    = 0x118
+	K_PAGEDOWN  = 0x119
 )
 
-type GlyphMap struct {
-	fonts      []*ttf.Font
-	glyphs     map[int]map[rune]*sdlSurface
-	charHeight int
-	charWidth  int
-}
-
-var textColFg sdl.Color = sdl.Color{0xFF, 0xFF, 0xFF, 0xFF}
-var textColBg sdl.Color = sdl.Color{0x00, 0x00, 0x00, 0xFF}
-
-func initGlyphMap() *GlyphMap {
-
-	ttf.Init()
-
-	fs := []*ttf.Font{
-		ttf.OpenFont(normalFontName, fontSize),
-		ttf.OpenFont(boldFontName, fontSize)}
-
-	gm := &GlyphMap{fs, make(map[int]map[rune]*sdlSurface), fs[0].Height(), 0}
-
-	g := gm.getGlyph('e', glyphStyleNormal)
-	gm.charWidth = int(g.W())
-
-	return gm
-}
-
-func (this *GlyphMap) getGlyph(c rune, glyphStyle int) Surface {
-
-	gm, exists := this.glyphs[glyphStyle]
-	if !exists {
-		gm = make(map[rune]*sdlSurface, 30)
-		this.glyphs[glyphStyle] = gm
-	}
-
-	g, exists := gm[c]
-	if !exists {
-		fgc := textColFg
-		bgc := textColBg
-		if (glyphStyle & glyphStyleInverse) == glyphStyleInverse {
-			fgc = textColBg
-			bgc = textColFg
-		}
-
-		s := string([]rune{c})
-		var gs *sdl.Surface
-		if (glyphStyle & glyphStyleNormal) == glyphStyleNormal {
-			gs = ttf.RenderUTF8_Shaded(this.fonts[0], s, fgc, bgc)
-		} else {
-			gs = ttf.RenderUTF8_Shaded(this.fonts[1], s, fgc, bgc)
-		}
-		g = &sdlSurface{gs, int(gs.W), int(gs.H), color.RGBA{0, 0, 0, 0}}
-		gm[c] = g
-	}
-
-	return g
-}
-
-func (this *GlyphMap) renderGlyph(c rune, glyphStyle int, dst Surface, x, y int) int {
-	g := this.getGlyph(c, glyphStyle)
-
-	dst.DrawSurface(x, y, g)
-
-	return x + int(g.W())
-}
-
 type ConsoleScreen struct {
-	ws    *Workspace
-	sfcs  [2]Surface
-	sfcIx int
-	cx    int
-	cy    int
-	in    chan *sdl.Keysym
+	ws      *Workspace
+	sfcs    [2]Surface
+	sfcIx   int
+	cx      int
+	cy      int
+	channel *Channel
 }
 
 func initConsole(workspace *Workspace, w, h int) *ConsoleScreen {
@@ -106,7 +46,7 @@ func initConsole(workspace *Workspace, w, h int) *ConsoleScreen {
 		0,
 		0,
 		0,
-		make(chan *sdl.Keysym, 100)}
+		workspace.broker.Subscribe(MT_KeyPress)}
 
 	cs.sfcs[0].Clear()
 	cs.sfcs[1].Clear()
@@ -130,10 +70,6 @@ func (this *ConsoleScreen) Name() string {
 	return ""
 }
 
-func (this *ConsoleScreen) Input() chan *sdl.Keysym {
-	return this.in
-}
-
 func (this *ConsoleScreen) FirstLineOfSplitScreen() int {
 
 	if this.cy <= splitScreenSize {
@@ -151,7 +87,7 @@ func (this *ConsoleScreen) Clear() {
 	this.cx = 0
 	this.cy = 0
 
-	this.ws.screen.StateChanged()
+	this.channel.PublishId(MT_UpdateText)
 }
 
 func (this *ConsoleScreen) ReadLine() (string, error) {
@@ -159,52 +95,56 @@ func (this *ConsoleScreen) ReadLine() (string, error) {
 	chars := make([]rune, 0, 10)
 	this.drawEditLine(cursorPos, chars)
 
-	for ks := range this.in {
-		switch ks.Sym {
-		case sdl.K_RETURN:
-			line := string(chars)
+	m := this.channel.Wait()
+	for ; m != nil; m = this.channel.Wait() {
+		switch ks := m.(type) {
+		case *KeyMessage:
+			{
+				switch ks.Sym {
+				case K_RETURN:
+					line := string(chars)
 
-			this.clearEditLine()
-			this.Write(line)
-			this.Write("\n")
-			return line, nil
-		case sdl.K_LEFT:
-			if cursorPos > 0 {
-				cursorPos--
-			}
-		case sdl.K_RIGHT:
-			if cursorPos < len(chars) {
-				cursorPos++
-			}
-		case sdl.K_HOME:
-			cursorPos = 0
-		case sdl.K_END:
-			cursorPos = len(chars)
-		case sdl.K_BACKSPACE:
-			if cursorPos > 0 {
-				chars = append(chars[:cursorPos-1], chars[cursorPos:]...)
-				cursorPos--
-			}
-		case sdl.K_DELETE:
-			if cursorPos < len(chars)-1 {
-				chars = append(chars[:cursorPos], chars[cursorPos+1:]...)
-			}
-		default:
-			if ks.Unicode != 0 {
-				rs := utf16.Decode([]uint16{ks.Unicode})
-				r := rs[0]
-				if unicode.IsGraphic(r) {
-					if cursorPos == len(chars) {
-						chars = append(chars, r)
-					} else {
-						chars = append(chars[:cursorPos],
-							append([]rune{r}, chars[cursorPos:]...)...)
+					this.clearEditLine()
+					this.Write(line)
+					this.Write("\n")
+					return line, nil
+				case K_LEFT:
+					if cursorPos > 0 {
+						cursorPos--
 					}
-					cursorPos++
+				case K_RIGHT:
+					if cursorPos < len(chars) {
+						cursorPos++
+					}
+				case K_HOME:
+					cursorPos = 0
+				case K_END:
+					cursorPos = len(chars)
+				case K_BACKSPACE:
+					if cursorPos > 0 {
+						chars = append(chars[:cursorPos-1], chars[cursorPos:]...)
+						cursorPos--
+					}
+				case K_DELETE:
+					if cursorPos < len(chars)-1 {
+						chars = append(chars[:cursorPos], chars[cursorPos+1:]...)
+					}
+				default:
+					if ks.Char != 0 {
+						if unicode.IsGraphic(ks.Char) {
+							if cursorPos == len(chars) {
+								chars = append(chars, ks.Char)
+							} else {
+								chars = append(chars[:cursorPos],
+									append([]rune{ks.Char}, chars[cursorPos:]...)...)
+							}
+							cursorPos++
+						}
+					}
 				}
+				this.drawEditLine(cursorPos, chars)
 			}
 		}
-		this.drawEditLine(cursorPos, chars)
 	}
 	return "", nil
 }
@@ -240,7 +180,7 @@ func (this *ConsoleScreen) drawEditLine(cursorPos int, chars []rune) {
 		this.cx+((cursorPos+3)*gm.charWidth)-2,
 		ny+gm.charHeight)
 
-	this.ws.screen.StateChanged()
+	this.channel.PublishId(MT_UpdateText)
 }
 
 func (this *ConsoleScreen) Surface() Surface {
@@ -281,7 +221,7 @@ func (this *ConsoleScreen) Write(text string) error {
 		}
 	}
 
-	this.ws.screen.StateChanged()
+	this.channel.PublishId(MT_UpdateText)
 
 	return nil
 }

@@ -15,6 +15,7 @@ type Workspace struct {
 	rootFrame    *RootFrame
 	procedures   map[string]Procedure
 	traceEnabled bool
+	broker       *MessageBroker
 	files        *Files
 	screen       *Screen
 	turtle       *Turtle
@@ -27,8 +28,9 @@ func CreateWorkspace() *Workspace {
 	if err != nil {
 		panic(err)
 	}
-	ws := &Workspace{nil, make(map[string]Procedure, 100), false, nil, nil, nil, nil, nil}
+	ws := &Workspace{nil, make(map[string]Procedure, 100), false, nil, nil, nil, nil, nil, nil}
 	ws.rootFrame = &RootFrame{ws, nil, nil, make(map[string]*Variable, 10)}
+	ws.broker = CreateMessageBroker()
 	ws.files = CreateFiles(path.Join(u.HomeDir, "logo"))
 	registerBuiltInProcedures(ws)
 
@@ -40,6 +42,9 @@ func CreateWorkspace() *Workspace {
 	ws.files.defaultFile = ws.console
 	ws.files.writer = ws.console
 	ws.files.reader = ws.console
+
+	ws.screen.Open()
+
 	return ws
 }
 
@@ -109,10 +114,13 @@ func (this *Workspace) evaluate(source string) error {
 	return nil
 }
 
-func (this *Workspace) RunInterpreter() error {
+func (this *Workspace) RunInterpreter() {
 	this.print(greeting)
 
-	return this.readFile()
+	go this.readFile()
+
+	l := this.broker.Subscribe(MT_Quit)
+	l.Wait()
 }
 
 func (this *Workspace) readFile() error {

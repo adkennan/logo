@@ -1,12 +1,5 @@
 package main
 
-import (
-	//"bytes"
-	//"github.com/jackyb/go-sdl2/sdl"
-	//"image"
-	"math"
-)
-
 const (
 	screenModeText = iota
 	screenModeSplit
@@ -16,24 +9,21 @@ const (
 const splitScreenSize = 4
 
 type Screen struct {
-	screen      Window
-	drawSurface Surface
-	w, h        int64
-	isDirty     bool
-	ws          *Workspace
-	screenMode  int
+	screen     Window
+	w, h       int
+	ws         *Workspace
+	screenMode int
+	channel    *Channel
 }
 
 func initScreen(workspace *Workspace) *Screen {
 
-	ss := newWindow()
+	ss := newWindow(workspace.broker)
 	w := ss.W()
 	h := ss.H()
-	ds := ss.CreateSurface(w, h)
 
-	s := &Screen{ss, ds, int64(w), int64(h), true, workspace, screenModeSplit}
+	s := &Screen{ss, w, h, workspace, screenModeSplit, workspace.broker.Subscribe(MT_UpdateText, MT_UpdateGfx)}
 
-	workspace.registerBuiltIn("TEXT", "", 3, _s_Text)
 	workspace.registerBuiltIn("FULLSCREEN", "FS", 0, _s_Fullscreen)
 	workspace.registerBuiltIn("TEXTSCREEN", "TS", 0, _s_Textscreen)
 	workspace.registerBuiltIn("SPLITSCREEN", "SS", 0, _s_Splitscreen)
@@ -41,51 +31,69 @@ func initScreen(workspace *Workspace) *Screen {
 	return s
 }
 
-func (this *Screen) Update() {
-	if !this.isDirty {
-		return
-	}
+func (this *Screen) Open() {
+	go this.Update()
+}
 
-	t := this.ws.turtle
-	this.screen.Clear(t.screenColor)
+func (this *Screen) Update() {
 
 	gm := this.ws.glyphMap
-	gs := this.drawSurface
-	c := this.ws.console
-	cs := c.Surface()
+	t := this.ws.turtle
 
-	switch this.screenMode {
-	case screenModeGraphic:
-		this.screen.DrawSurface(0, 0, gs)
-		if t.turtleState == turtleStateShown {
-			this.DrawTurtle()
-		}
-	case screenModeText:
-		this.screen.DrawSurface(0, 0, cs)
-	case screenModeSplit:
-		th := gm.charHeight * splitScreenSize
+	for m := this.channel.Wait(); m != nil; m = this.channel.Wait() {
+		switch m.MessageType() {
+		case MT_UpdateGfx:
+			{
+				rm := (m).(*RegionMessage)
 
-		this.screen.DrawSurfacePart(0, 0, gs, 0, 0, int(this.w), int(this.h)-th)
-		this.screen.DrawSurfacePart(0, int(this.h)-th, cs,
-			0, (1+c.FirstLineOfSplitScreen())*gm.charHeight, int(this.w), th)
+				if this.screenMode == screenModeText {
+					continue
+				}
 
-		if t.turtleState == turtleStateShown {
-			this.DrawTurtle()
+				if this.screenMode == screenModeSplit {
+					th := gm.charHeight * splitScreenSize
+
+					this.screen.SetClipRect(0, 0, this.w, this.h-th)
+				}
+
+				for _, r := range rm.regions {
+					this.screen.ClearRect(t.screenColor, r.x, r.y, r.w, r.h)
+					this.screen.DrawSurfacePart(r.x, r.y, rm.surface, r.x, r.y, r.w, r.h)
+				}
+				if t.turtleState == turtleStateShown {
+					this.DrawTurtle()
+				}
+
+				this.screen.ClearClipRect()
+
+				this.screen.Update()
+			}
+
+		case MT_UpdateText:
+			{
+				t := this.ws.turtle
+
+				gm := this.ws.glyphMap
+				c := this.ws.console
+				cs := c.Surface()
+				switch this.screenMode {
+				case screenModeText:
+					this.screen.DrawSurface(0, 0, cs)
+				case screenModeSplit:
+					th := gm.charHeight * splitScreenSize
+
+					this.screen.DrawSurfacePart(0, this.h-th, cs,
+						0, (1+c.FirstLineOfSplitScreen())*gm.charHeight, this.w, th)
+
+					if t.turtleState == turtleStateShown {
+						this.DrawTurtle()
+					}
+				}
+
+				this.screen.Update()
+			}
 		}
 	}
-
-	this.screen.Update()
-	this.isDirty = false
-}
-
-func (this *Screen) Close() {
-	//this.screen.Close()
-}
-
-func (this *Screen) clear() {
-	this.drawSurface.SetColor(this.ws.turtle.screenColor)
-	this.drawSurface.Clear()
-	this.isDirty = true
 }
 
 func (this *Screen) DrawTurtle() {
@@ -94,113 +102,73 @@ func (this *Screen) DrawTurtle() {
 	y := int(-t.y+float64(this.h/2)) - turtleSize
 
 	this.screen.DrawSurface(x, y, t.sprite)
-
-	/*
-		t := this.ws.turtle
-		d := normAngle(t.d)
-		x := t.x + float64(this.w/2)
-		y := -t.y + float64(this.h/2)
-		x1 := int(x - (5 * math.Cos((d-90)*dToR)))
-		y1 := int(y - (5 * math.Sin((d-90)*dToR)))
-		x2 := int(x - (5 * math.Cos((d+90)*dToR)))
-		y2 := int(y - (5 * math.Sin((d+90)*dToR)))
-		x3 := int(x - (10 * math.Cos(d*dToR)))
-		y3 := int(y - (10 * math.Sin(d*dToR)))
-
-		r := this.screen
-		r.SetColor(colorWhite)
-		r.DrawLine(x1, y1, x2, y2)
-		r.DrawLine(x2, y2, x3, y3)
-		r.DrawLine(x3, y3, x1, y1)
-	*/
 }
 
-func (this *Screen) normX(x int64) int64 {
-	return x + this.w/2
+type Region struct {
+	x, y, w, h int
 }
 
-func (this *Screen) normY(y int64) int64 {
-	return -y + this.h/2
+func (this *Region) Area() int {
+	return this.w * this.h
 }
 
-func (this *Screen) DrawLine(x1, y1, x2, y2 int64) {
-
-	x1 = this.normX(x1)
-	x2 = this.normX(x2)
-	y1 = this.normY(y1)
-	y2 = this.normY(y2)
-
-	dx := int64(math.Abs(float64(x2 - x1)))
-	dy := int64(math.Abs(float64(y2 - y1)))
-
-	sx := int64(-1)
-	if x1 < x2 {
-		sx = 1
+func intMin(n1, n2 int) int {
+	if n1 < n2 {
+		return n1
 	}
-	sy := int64(-1)
-	if y1 < y2 {
-		sy = 1
-	}
-	err := dx - dy
-
-	r := this.drawSurface
-	r.SetColor(this.ws.turtle.penColor)
-	for {
-		//print("x=", x1, ", y=", y1, "\n")
-		r.DrawPoint(int(x1), int(y1))
-		if x1 == x2 && y1 == y2 {
-			break
-		}
-		e2 := 2 * err
-		if e2 > -dy {
-			err -= dy
-			x1 += sx
-			if (sx == -1 && x1 == 0) || (sx == 1 && x1 == this.w-1) {
-				break
-			}
-		}
-		if e2 < dx {
-			err += dx
-			y1 += sy
-			if (sy == -1 && y1 == 0) || (sy == 1 && y1 == this.h-1) {
-				break
-			}
-		}
-	}
-
-	this.isDirty = true
+	return n2
 }
 
-func (this *Screen) StateChanged() {
-	this.isDirty = true
+func intMax(n1, n2 int) int {
+	if n1 < n2 {
+		return n2
+	}
+	return n1
 }
 
-func _s_Text(frame Frame, parameters []Node) (Node, error) {
-	/*
-		fx, fy, err := evalNumericParams(parameters[0], parameters[1])
-		if err != nil {
-			return nil, err
-		}
-		buf := &bytes.Buffer{}
-		nodeToText(buf, parameters[2], false)
-		t := buf.String()
-		ws := frame.workspace()
-		nx := ws.screen.normX(int64(fx))
-		ny := ws.screen.normY(int64(fy))
+func (this *Region) CombinedArea(other *Region) int {
 
-		for _, c := range t {
-			nx = int64(ws.glyphMap.renderGlyph(c, glyphStyleNormal, ws.screen.drawSurface, int(nx), int(ny)))
-		}
+	w := intMax(this.x, other.x) - intMin(this.x, other.x)
+	h := intMax(this.y, other.y) - intMin(this.y, other.y)
 
-		ws.screen.StateChanged()
-	*/return nil, nil
+	return w * h
+}
+
+func (this *Region) Contains(other *Region) bool {
+	return this.x < other.x && this.y < other.y &&
+		this.x+this.w > other.x+other.w &&
+		this.y+this.h > other.y+other.h
+}
+
+func (this *Region) Combine(other *Region) {
+
+	x1 := intMin(this.x, other.x)
+	y1 := intMin(this.y, other.y)
+	x2 := intMax(this.x, other.x)
+	y2 := intMax(this.y, other.y)
+
+	this.x = x1
+	this.y = y1
+	this.w = x2 - x1
+	this.h = y2 - y1
+}
+
+type RegionMessage struct {
+	MessageBase
+	surface Surface
+	regions []*Region
+}
+
+func newRegionMessage(messageType int, surface Surface, regions []*Region) *RegionMessage {
+	return &RegionMessage{MessageBase{messageType}, surface, regions}
 }
 
 func _s_Fullscreen(frame Frame, parameters []Node) (Node, error) {
 
 	ws := frame.workspace()
 	ws.screen.screenMode = screenModeGraphic
-	ws.screen.StateChanged()
+
+	ws.broker.PublishId(MT_UpdateGfx)
 
 	return nil, nil
 }
@@ -209,7 +177,8 @@ func _s_Textscreen(frame Frame, parameters []Node) (Node, error) {
 
 	ws := frame.workspace()
 	ws.screen.screenMode = screenModeText
-	ws.screen.StateChanged()
+
+	ws.broker.PublishId(MT_UpdateGfx)
 
 	return nil, nil
 }
@@ -218,7 +187,8 @@ func _s_Splitscreen(frame Frame, parameters []Node) (Node, error) {
 
 	ws := frame.workspace()
 	ws.screen.screenMode = screenModeSplit
-	ws.screen.StateChanged()
+
+	ws.broker.PublishId(MT_UpdateGfx)
 
 	return nil, nil
 }
