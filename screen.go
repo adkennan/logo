@@ -57,7 +57,6 @@ func (this *Screen) Update() {
 				}
 
 				for _, r := range rm.regions {
-					println(r.x, ",", r.y, " -> ", r.w, ",", r.h)
 					this.screen.ClearRect(t.screenColor, r.x, r.y, r.w, r.h)
 					this.screen.DrawSurfacePart(r.x, r.y, rm.surface, r.x, r.y, r.w, r.h)
 				}
