@@ -57,6 +57,7 @@ func (this *Screen) Update() {
 				}
 
 				for _, r := range rm.regions {
+					println(r.x, ",", r.y, " -> ", r.w, ",", r.h)
 					this.screen.ClearRect(t.screenColor, r.x, r.y, r.w, r.h)
 					this.screen.DrawSurfacePart(r.x, r.y, rm.surface, r.x, r.y, r.w, r.h)
 				}
@@ -151,6 +152,41 @@ func (this *Region) Combine(other *Region) {
 	this.y = y1
 	this.w = x2 - x1
 	this.h = y2 - y1
+}
+
+func (this *Region) ContainsPoint(x, y int) bool {
+	return this.x <= x && this.y <= y &&
+		this.x+this.w > x && this.y+this.h > y
+}
+
+func (this *Region) AdjacentTo(x, y int) bool {
+
+	return (x == this.x-1 && this.y <= y && y < this.y+this.h) ||
+		(x == this.x+this.w && this.y <= y && y < this.y+this.h) ||
+		(y == this.y-1 && this.x <= x && x < this.x+this.w) ||
+		(y == this.y+this.h && this.x <= x && x < this.x+this.w)
+}
+
+func (this *Region) ExpandToInclude(x, y int) {
+
+	if x < this.x {
+		this.x = x
+	} else if x >= this.x+this.w {
+		this.w = (x - this.x) + 1
+	}
+
+	if y < this.y {
+		this.y = y
+	} else if y >= this.y+this.h {
+		this.h = (y - this.y) + 1
+	}
+}
+
+func (this *Region) Multiply(v int) {
+	this.x *= v
+	this.y *= v
+	this.w *= v
+	this.h *= v
 }
 
 type RegionMessage struct {

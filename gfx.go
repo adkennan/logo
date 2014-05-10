@@ -153,6 +153,9 @@ func (this *sdlWindow) DrawSurfacePart(dx, dy int, sfc Surface, sx, sy, sw, sh i
 	dst := &sdl.Rect{int16(dx), int16(dy), uint16(sw), uint16(sh)}
 
 	this.win.Blit(dst, ss.s, src)
+
+	//	gfx.RectangleRGBA(this.win, int16(dx), int16(dy), int16(dx+sw), int16(dy+sh), 0, 255, 0, 255)
+
 }
 
 func toSdlColor(format *sdl.PixelFormat, c color.Color) uint32 {

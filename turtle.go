@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"image/color"
 	"math"
+	"sync"
 	"time"
 )
 
@@ -18,6 +19,7 @@ const (
 )
 
 const turtleSize = 16
+const gridSize = 32
 
 var (
 	colorBlack = color.RGBA{0, 0, 0, 0xff}
@@ -27,20 +29,22 @@ var (
 const dToR float64 = math.Pi / 180.0
 
 type Turtle struct {
-	x, y         float64
-	d            float64
-	scale        float64
-	turtleState  int
-	penState     int
-	penMode      int
-	penColor     color.RGBA
-	screenColor  color.RGBA
-	floodColor   color.RGBA
-	ws           *Workspace
-	sprite       Surface
-	image        Surface
-	broker       *MessageBroker
-	dirtyRegions []*Region
+	x, y        float64
+	d           float64
+	scale       float64
+	turtleState int
+	penState    int
+	penMode     int
+	penColor    color.RGBA
+	screenColor color.RGBA
+	floodColor  color.RGBA
+	ws          *Workspace
+	sprite      Surface
+	image       Surface
+	broker      *MessageBroker
+	dirtyGrid   []bool
+	gridSweep   int
+	mutex       *sync.Mutex
 }
 
 func (this *Turtle) normX(x int) int {
@@ -60,14 +64,61 @@ func (this *Turtle) clear() {
 
 func (this *Turtle) addDirtyRegion(x1, y1, x2, y2 int) {
 
-	x := intMin(x1, x2) - turtleSize/2
-	y := intMin(y1, y2) - turtleSize/2
-	w := turtleSize + intMax(x1, x2) - x
-	h := turtleSize + intMax(y1, y2) - y
+	gridHeight := len(this.dirtyGrid) / this.gridSweep
+	bx1 := intMax(0, intMin(x1, x2)/gridSize)
+	by1 := intMax(0, intMin(y1, y2)/gridSize)
+	bx2 := intMin(this.gridSweep-1, (intMax(x1, x2) / gridSize))
+	by2 := intMin(gridHeight-1, (intMax(y1, y2) / gridSize))
 
-	r := &Region{x, y, w, h}
+	this.mutex.Lock()
+	defer this.mutex.Unlock()
 
-	this.dirtyRegions = append(this.dirtyRegions, r)
+	for y := by1; y <= by2; y++ {
+		l := this.dirtyGrid[y*this.gridSweep : (y+1)*this.gridSweep]
+		for x := bx1; x <= bx2; x++ {
+			//if x >= bx1 && x <= bx2 {
+			l[x] = true
+			//}
+		}
+	}
+}
+
+func (this *Turtle) tick() {
+	for {
+		this.mutex.Lock()
+
+		gridHeight := this.image.H() / gridSize
+		regions := make([]*Region, 0, 1)
+		for y := 0; y < gridHeight; y++ {
+			l := this.dirtyGrid[y*this.gridSweep : (y+1)*this.gridSweep]
+			for x := 0; x < this.gridSweep; x++ {
+				if l[x] {
+					l[x] = false
+					for _, r := range regions {
+						if r.ContainsPoint(x, y) {
+							goto matched
+						} else if r.AdjacentTo(x, y) {
+							r.ExpandToInclude(x, y)
+							goto matched
+						}
+					}
+					regions = append(regions, &Region{x, y, 1, 1})
+				} else {
+				}
+			matched:
+			}
+		}
+
+		if len(regions) > 0 {
+			for _, r := range regions {
+				r.Multiply(gridSize)
+			}
+			this.broker.Publish(newRegionMessage(MT_UpdateGfx, this.image, regions))
+		}
+
+		this.mutex.Unlock()
+		time.Sleep(30 * time.Millisecond)
+	}
 }
 
 func (this *Turtle) drawLine(x1, y1, x2, y2 int) {
@@ -123,8 +174,8 @@ func (this *Turtle) drawLine(x1, y1, x2, y2 int) {
 	if this.penState == penStateDown {
 		this.addDirtyRegion(rx1, ry1, x2, y2)
 	} else {
-		this.addDirtyRegion(rx1, ry1, rx1+1, ry1+1)
-		this.addDirtyRegion(x2, y2, x2+1, y2+1)
+		this.addDirtyRegion(rx1, ry1, rx1, ry1)
+		this.addDirtyRegion(x2, y2, x2, y2)
 	}
 }
 
@@ -145,23 +196,27 @@ func (this *Turtle) updateSprite() {
 	r.DrawLine(x1, y1, x2, y2)
 	r.DrawLine(x2, y2, x3, y3)
 	r.DrawLine(x3, y3, x1, y1)
+
+	this.addDirtyRegion(this.normX(int(this.x))-turtleSize, this.normY(int(this.y))-turtleSize,
+		this.normX(int(this.x))+turtleSize, this.normY(int(this.y))+turtleSize)
 }
 
 func (this *Turtle) refreshTurtle() {
 
 	tx := this.normX(int(this.x))
 	ty := this.normY(int(this.y))
-	this.addDirtyRegion(tx, ty, tx+1, ty+1)
+	this.addDirtyRegion(tx-turtleSize/2, ty-turtleSize/2, tx+turtleSize/2, ty+turtleSize/2)
 }
 
 func initTurtle(ws *Workspace) *Turtle {
 	turtle := &Turtle{
-		0, 0, 0, 1.0, turtleStateShown, penStateDown, penModePaint, colorWhite, colorBlack, colorWhite, ws, nil, nil, nil, make([]*Region, 0, 8)}
+		0, 0, 0, 1.0, turtleStateShown, penStateDown, penModePaint, colorWhite, colorBlack, colorWhite, ws, nil, nil, nil, nil, 0, &sync.Mutex{}}
 
 	turtle.sprite = ws.screen.screen.CreateSurface(turtleSize*2, turtleSize*2)
 	turtle.image = ws.screen.screen.CreateSurface(ws.screen.screen.W(), ws.screen.screen.H())
 	turtle.broker = ws.broker
-
+	turtle.gridSweep = turtle.image.W() / 32
+	turtle.dirtyGrid = make([]bool, turtle.gridSweep*(turtle.image.H()/32))
 	turtle.updateSprite()
 
 	ws.registerBuiltIn("FORWARD", "FD", 1, _t_Forward)
@@ -191,16 +246,6 @@ func initTurtle(ws *Workspace) *Turtle {
 	go turtle.tick()
 
 	return turtle
-}
-
-func (this *Turtle) tick() {
-	for {
-		if len(this.dirtyRegions) > 0 {
-			this.broker.Publish(newRegionMessage(MT_UpdateGfx, this.image, this.dirtyRegions))
-			this.dirtyRegions = []*Region{}
-		}
-		time.Sleep(30 * time.Millisecond)
-	}
 }
 
 func normAngle(d float64) float64 {
