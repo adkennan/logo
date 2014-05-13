@@ -4,6 +4,9 @@ const (
 	MT_KeyPress = iota
 	MT_UpdateText
 	MT_UpdateGfx
+	MT_UpdateEdit
+	MT_EditStart
+	MT_EditStop
 	MT_Quit
 )
 
@@ -20,7 +23,16 @@ func (this *MessageBase) MessageType() int { return this.messageType }
 type Channel struct {
 	c chan Message
 	f []int
+	p bool
 	b *MessageBroker
+}
+
+func (this *Channel) Pause() {
+	this.p = true
+}
+
+func (this *Channel) Resume() {
+	this.p = false
 }
 
 func (this *Channel) Wait() Message {
@@ -71,7 +83,7 @@ func CreateMessageBroker() *MessageBroker {
 }
 
 func (this *MessageBroker) Subscribe(messageTypes ...int) *Channel {
-	l := &Channel{make(chan Message, 100), messageTypes, this}
+	l := &Channel{make(chan Message, 100), messageTypes, false, this}
 	this.channels = append(this.channels, l)
 	return l
 }
@@ -79,7 +91,9 @@ func (this *MessageBroker) Subscribe(messageTypes ...int) *Channel {
 func (this *MessageBroker) Publish(m Message) {
 	go func() {
 		for _, l := range this.channels {
-			l.push(m)
+			if !l.p {
+				l.push(m)
+			}
 		}
 	}()
 }

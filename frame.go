@@ -386,6 +386,10 @@ func evaluateExpression(frame Frame, n Node) (Node, Node, error) {
 			ix := getInfixOp(nn.value)
 			if ix >= 0 {
 				if ix == 4 {
+					if prevIx == -1 || prevIx == 5 {
+						exit = true
+						break
+					}
 					braceCount++
 				}
 				if ix == 5 {

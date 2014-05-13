@@ -72,3 +72,19 @@ func errorFileNotOpen(name string) error {
 func errorListOfNItemsExpected(node Node, n int) error {
 	return toError(16, node, "Expected list of "+fmt.Sprint(n)+" items.")
 }
+
+func errorUnknownColor(node Node, name string) error {
+	return toError(17, node, "I don't know the color "+name+".")
+}
+
+func errorNumberNotInRange(node Node, hi, low int) error {
+	return toError(18, node, fmt.Sprintf("Expected a number between %d and %d.", hi, low))
+}
+
+func errorNotDir(path string) error {
+	return toError(19, nil, path+" is not a directory.")
+}
+
+func errorNotFile(path string) error {
+	return toError(20, nil, path+" is not a file.")
+}

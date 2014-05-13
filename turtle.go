@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"image/color"
 	"math"
+	"strings"
 	"sync"
 	"time"
 )
@@ -18,12 +19,44 @@ const (
 	turtleStateHidden
 )
 
-const turtleSize = 16
+const turtleSize = 14
 const gridSize = 32
 
 var (
-	colorBlack = color.RGBA{0, 0, 0, 0xff}
-	colorWhite = color.RGBA{0xff, 0xff, 0xff, 0xff}
+	colorBlack      = color.RGBA{0, 0, 0, 0xff}
+	colorMagenta    = color.RGBA{0x8c, 0x3b, 0x50, 0xff}
+	colorDarkBlue   = color.RGBA{0x55, 0x45, 0x84, 0xff}
+	colorPurple     = color.RGBA{0xfc, 0x56, 0xea, 0xff}
+	colorDarkGreen  = color.RGBA{0x00, 0x67, 0x53, 0xff}
+	colorGrey       = color.RGBA{0x90, 0x90, 0x90, 0xff}
+	colorMediumBlue = color.RGBA{0x00, 0xa3, 0xeb, 0xff}
+	colorLightBlue  = color.RGBA{0xcc, 0xbf, 0xf4, 0xff}
+	colorBrown      = color.RGBA{0x4c, 0x5c, 0x20, 0xff}
+	colorOrange     = color.RGBA{0xf6, 0x7e, 0x34, 0xff}
+	colorPink       = color.RGBA{0xff, 0xb6, 0xc7, 0xff}
+	colorGreen      = color.RGBA{0x00, 0xc9, 0x43, 0xff}
+	colorYellow     = color.RGBA{0xc5, 0xd2, 0x9d, 0xff}
+	colorAqua       = color.RGBA{0x86, 0xdb, 0xc9, 0xff}
+	colorWhite      = color.RGBA{0xff, 0xff, 0xff, 0xff}
+	turtleColor     = color.RGBA{0x21, 0xd0, 0x21, 0xff}
+
+	colorsMap = map[string]color.RGBA{
+		"black":      colorBlack,
+		"magenta":    colorMagenta,
+		"darkblue":   colorDarkBlue,
+		"purple":     colorPurple,
+		"darkgreen":  colorDarkGreen,
+		"grey":       colorGrey,
+		"mediumblue": colorMediumBlue,
+		"lightblue":  colorLightBlue,
+		"brown":      colorBrown,
+		"orange":     colorOrange,
+		"pink":       colorPink,
+		"green":      colorGreen,
+		"yellow":     colorYellow,
+		"aqua":       colorAqua,
+		"white":      colorWhite,
+	}
 )
 
 const dToR float64 = math.Pi / 180.0
@@ -183,29 +216,29 @@ func (this *Turtle) updateSprite() {
 
 	t := this
 	d := normAngle(t.d)
-	x1 := int(turtleSize - (5 * math.Cos((d-90)*dToR)))
-	y1 := int(turtleSize - (5 * math.Sin((d-90)*dToR)))
-	x2 := int(turtleSize - (5 * math.Cos((d+90)*dToR)))
-	y2 := int(turtleSize - (5 * math.Sin((d+90)*dToR)))
-	x3 := int(turtleSize - (10 * math.Cos(d*dToR)))
-	y3 := int(turtleSize - (10 * math.Sin(d*dToR)))
+	ht := float64(turtleSize / 2)
+	x1 := int(turtleSize - (ht * math.Cos((d-90)*dToR)))
+	y1 := int(turtleSize - (ht * math.Sin((d-90)*dToR)))
+	x2 := int(turtleSize - (ht * math.Cos((d+90)*dToR)))
+	y2 := int(turtleSize - (ht * math.Sin((d+90)*dToR)))
+	x3 := int(turtleSize - (float64(turtleSize) * math.Cos(d*dToR)))
+	y3 := int(turtleSize - (float64(turtleSize) * math.Sin(d*dToR)))
 
+	tx := this.normX(int(this.x)) - turtleSize
+	ty := this.normY(int(this.y)) - turtleSize
 	r := this.sprite
 	r.Clear()
-	r.SetColor(colorWhite)
-	r.DrawLine(x1, y1, x2, y2)
-	r.DrawLine(x2, y2, x3, y3)
-	r.DrawLine(x3, y3, x1, y1)
+	r.SetColor(turtleColor)
+	r.FillTriangle(x1, y1, x2, y2, x3, y3)
 
-	this.addDirtyRegion(this.normX(int(this.x))-turtleSize, this.normY(int(this.y))-turtleSize,
-		this.normX(int(this.x))+turtleSize, this.normY(int(this.y))+turtleSize)
+	this.addDirtyRegion(tx, ty, tx+turtleSize*2, ty+turtleSize*2)
 }
 
 func (this *Turtle) refreshTurtle() {
 
 	tx := this.normX(int(this.x))
 	ty := this.normY(int(this.y))
-	this.addDirtyRegion(tx-turtleSize/2, ty-turtleSize/2, tx+turtleSize/2, ty+turtleSize/2)
+	this.addDirtyRegion(tx-turtleSize, ty-turtleSize, tx+turtleSize, ty+turtleSize)
 }
 
 func initTurtle(ws *Workspace) *Turtle {
@@ -234,6 +267,7 @@ func initTurtle(ws *Workspace) *Turtle {
 	ws.registerBuiltIn("HIDETURTLE", "HT", 0, _t_HideTurtle)
 	ws.registerBuiltIn("PENUP", "PU", 0, _t_PenUp)
 	ws.registerBuiltIn("PENDOWN", "PD", 0, _t_PenDown)
+	ws.registerBuiltIn("PENCOLOR", "PC", 1, _t_PenColor)
 
 	ws.registerBuiltIn("HEADING", "", 0, _t_Heading)
 	ws.registerBuiltIn("POS", "", 0, _t_Pos)
@@ -440,15 +474,19 @@ func _t_SetPos(frame Frame, parameters []Node) (Node, error) {
 	switch l := parameters[0].(type) {
 	case *ListNode:
 
-		if l.length() != 2 {
-			return nil, errorListOfNItemsExpected(l, 2)
-		}
-
-		x, err := evalToNumber(l.firstChild)
+		ll, err := evalList(frame, l)
 		if err != nil {
 			return nil, err
 		}
-		y, err := evalToNumber(l.firstChild.next())
+		if ll.length() != 2 {
+			return nil, errorListOfNItemsExpected(l, 2)
+		}
+
+		x, err := evalToNumber(ll.firstChild)
+		if err != nil {
+			return nil, err
+		}
+		y, err := evalToNumber(ll.firstChild.next())
 		if err != nil {
 			return nil, err
 		}
@@ -527,5 +565,60 @@ func _t_Text(frame Frame, parameters []Node) (Node, error) {
 
 	t.addDirtyRegion(x1, ny, nx, ny+gm.charHeight)
 
+	return nil, nil
+}
+
+func evalToColorPart(n Node) (uint8, error) {
+	v, err := evalToNumber(n)
+	if err != nil {
+		return 0, err
+	}
+
+	if v < 0 || v > 255 {
+		return 0, errorNumberNotInRange(n, 0, 255)
+	}
+
+	return uint8(v), nil
+}
+
+func _t_PenColor(frame Frame, parameters []Node) (Node, error) {
+
+	var c color.RGBA
+
+	switch p := parameters[0].(type) {
+	case *WordNode:
+		cc, ok := colorsMap[strings.ToLower(p.value)]
+		if !ok {
+			return nil, errorUnknownColor(p, p.value)
+		}
+		c = cc
+	case *ListNode:
+		ep, err := evalList(frame, p)
+		if err != nil {
+			return nil, err
+		}
+		if ep.length() != 3 {
+			return nil, errorListOfNItemsExpected(p, 3)
+		}
+		n := ep.firstChild
+		r, err := evalToColorPart(n)
+		if err != nil {
+			return nil, err
+		}
+		n = n.next()
+		g, err := evalToColorPart(n)
+		if err != nil {
+			return nil, err
+		}
+		n = n.next()
+		b, err := evalToColorPart(n)
+		if err != nil {
+			return nil, err
+		}
+
+		c = color.RGBA{r, g, b, 0xff}
+	}
+
+	frame.workspace().turtle.penColor = c
 	return nil, nil
 }

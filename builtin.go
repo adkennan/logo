@@ -1301,6 +1301,106 @@ func _bi_Savel(frame Frame, parameters []Node) (Node, error) {
 	return _bi_Pons(frame, parameters)
 }
 
+func _bi_Catalog(frame Frame, parameters []Node) (Node, error) {
+
+	frame.workspace().files.Catalog()
+	return nil, nil
+}
+
+func _bi_Prefix(frame Frame, parameters []Node) (Node, error) {
+
+	return newWordNode(-1, -1, frame.workspace().files.rootPath, true), nil
+}
+
+func _bi_SetPrefix(frame Frame, parameters []Node) (Node, error) {
+
+	p, err := evalToWord(parameters[0])
+	if err != nil {
+		return nil, err
+	}
+	return nil, frame.workspace().files.SetPrefix(p)
+}
+
+func _bi_CreateDir(frame Frame, parameters []Node) (Node, error) {
+
+	p, err := evalToWord(parameters[0])
+	if err != nil {
+		return nil, err
+	}
+	return nil, frame.workspace().files.CreateDir(p)
+}
+
+func _bi_EraseFile(frame Frame, parameters []Node) (Node, error) {
+
+	p, err := evalToWord(parameters[0])
+	if err != nil {
+		return nil, err
+	}
+	return nil, frame.workspace().files.EraseFile(p)
+}
+
+func _bi_Filep(frame Frame, parameters []Node) (Node, error) {
+
+	p, err := evalToWord(parameters[0])
+	if err != nil {
+		return nil, err
+	}
+	if frame.workspace().files.IsFile(p) {
+		return trueNode, nil
+	}
+	return falseNode, nil
+}
+
+func _bi_Rename(frame Frame, parameters []Node) (Node, error) {
+
+	from, err := evalToWord(parameters[0])
+	if err != nil {
+		return nil, err
+	}
+	to, err := evalToWord(parameters[1])
+	if err != nil {
+		return nil, err
+	}
+	return nil, frame.workspace().files.Rename(from, to)
+}
+
+func _bi_Pofile(frame Frame, parameters []Node) (Node, error) {
+
+	p, err := evalToWord(parameters[0])
+	if err != nil {
+		return nil, err
+	}
+
+	fs := frame.workspace().files
+
+	err = fs.OpenFile(p)
+	if err != nil {
+		return nil, err
+	}
+	defer fs.CloseFile(p)
+
+	err = fs.SetReader(p)
+	if err != nil {
+		return nil, err
+	}
+
+	for {
+		l, err := fs.reader.ReadLine()
+
+		if err != nil {
+			if err == io.EOF {
+				break
+			}
+			return nil, err
+		}
+
+		fs.writer.Write(l)
+		fs.writer.Write("\n")
+	}
+
+	return nil, nil
+}
+
 func registerBuiltInProcedures(workspace *Workspace) {
 
 	workspace.registerBuiltIn("OUTPUT", "OP", 1, _bi_Output)
@@ -1404,4 +1504,14 @@ func registerBuiltInProcedures(workspace *Workspace) {
 	workspace.registerBuiltIn("LOAD", "", 1, _bi_Load)
 	workspace.registerBuiltIn("SAVE", "", 1, _bi_Save)
 	workspace.registerBuiltIn("SAVEL", "", 2, _bi_Savel)
+
+	workspace.registerBuiltIn("CATALOG", "", 0, _bi_Catalog)
+	workspace.registerBuiltIn("PREFIX", "", 0, _bi_Prefix)
+	workspace.registerBuiltIn("SETPREFIX", "", 1, _bi_SetPrefix)
+	workspace.registerBuiltIn("CREATEDIR", "", 1, _bi_CreateDir)
+	workspace.registerBuiltIn("ERASEFILE", "", 1, _bi_EraseFile)
+	workspace.registerBuiltIn("FILEP", "", 1, _bi_Filep)
+	workspace.registerBuiltIn("RENAME", "", 2, _bi_Rename)
+	workspace.registerBuiltIn("POFILE", "", 1, _bi_Pofile)
+
 }

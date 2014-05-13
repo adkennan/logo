@@ -2,9 +2,9 @@ package main
 
 import (
 	"bufio"
+	"io/ioutil"
 	"os"
 	"path"
-	"strings"
 )
 
 type File interface {
@@ -29,6 +29,19 @@ type Files struct {
 func CreateFiles(rootPath string) *Files {
 	df := NewStdIOFile()
 
+	d, err := os.Stat(rootPath)
+	if err != nil {
+		if os.IsNotExist(err) {
+			err = os.Mkdir(rootPath, 0666)
+		}
+		if err != nil {
+			panic(err)
+		}
+	}
+	if !d.IsDir() {
+		panic(errorNotDir(rootPath))
+	}
+
 	f := &Files{
 		rootPath,
 		1,
@@ -38,25 +51,137 @@ func CreateFiles(rootPath string) *Files {
 	return f
 }
 
-func (this *Files) OpenFile(name string) error {
-	uname := strings.ToUpper(name)
-	_, exists := this.openFiles[uname]
-	if exists {
-		return nil
+func (this *Files) writeLine(s string) {
+	this.writer.Write(s)
+	this.writer.Write("\n")
+}
+
+func (this *Files) write(s string) {
+	this.writer.Write(s)
+}
+
+func (this *Files) normPath(p string) string {
+	p = path.Clean(p)
+	if !path.IsAbs(p) {
+		p = path.Join(this.rootPath, p)
 	}
 
-	p := path.Join(this.rootPath, uname)
-	f, err := os.OpenFile(p, os.O_RDWR|os.O_CREATE, 0666)
+	return p
+}
+
+func (this *Files) SetPrefix(prefix string) error {
+
+	p := this.normPath(prefix)
+
+	f, err := os.Stat(p)
 	if err != nil {
 		return err
 	}
 
-	this.openFiles[uname] = &NormalFile{
-		this.nextId, uname, f, bufio.NewReader(f)}
+	if !f.IsDir() {
+		return errorNotDir(p)
+	}
+
+	this.rootPath = p
+	return nil
+}
+
+func (this *Files) CreateDir(path string) error {
+
+	p := this.normPath(path)
+
+	_, err := os.Stat(p)
+	if err != nil && !os.IsNotExist(err) {
+		return err
+	}
+
+	return os.Mkdir(p, 0666)
+}
+
+func (this *Files) Catalog() error {
+
+	this.writeLine(this.rootPath)
+	fs, err := ioutil.ReadDir(this.rootPath)
+	if err != nil {
+		return err
+	}
+	for _, f := range fs {
+		this.write("  ")
+		if f.IsDir() {
+			this.write(f.Name())
+			this.writeLine("/")
+		} else {
+			this.writeLine(f.Name())
+		}
+	}
+
+	return nil
+}
+
+func (this *Files) EraseFile(name string) error {
+
+	p := this.normPath(name)
+
+	_, err := os.Stat(p)
+	if err != nil {
+		return err
+	}
+
+	return os.Remove(p)
+}
+
+func (this *Files) IsFile(name string) bool {
+	p := this.normPath(name)
+
+	f, err := os.Stat(p)
+	if err != nil {
+		return false
+	}
+
+	return !f.IsDir()
+}
+
+func (this *Files) Rename(from, to string) error {
+	fp := this.normPath(from)
+	tp := this.normPath(to)
+
+	return os.Rename(fp, tp)
+}
+
+func (this *Files) OpenFile(name string) error {
+	name = this.normPath(name)
+
+	_, exists := this.openFiles[name]
+	if exists {
+		return nil
+	}
+
+	f, err := os.OpenFile(name, os.O_RDWR|os.O_CREATE, 0666)
+	if err != nil {
+		return err
+	}
+
+	this.openFiles[name] = &NormalFile{
+		this.nextId, name, f, bufio.NewReader(f)}
 
 	this.nextId++
 
 	return nil
+}
+
+func (this *Files) GetFile(name string) (File, error) {
+
+	if name == "" {
+		return this.defaultFile, nil
+	}
+
+	name = this.normPath(name)
+	f, ok := this.openFiles[name]
+	if !ok {
+		return nil, errorFileNotOpen(name)
+	}
+
+	return f, nil
 }
 
 func (this *Files) CloseFile(name string) error {
@@ -64,13 +189,13 @@ func (this *Files) CloseFile(name string) error {
 		return nil
 	}
 
-	uname := strings.ToUpper(name)
-	f, ok := this.openFiles[uname]
+	name = this.normPath(name)
+	f, ok := this.openFiles[name]
 	if !ok {
 		return errorFileNotOpen(name)
 	}
 
-	delete(this.openFiles, uname)
+	delete(this.openFiles, name)
 
 	if this.reader == f {
 		this.reader = this.defaultFile
@@ -88,8 +213,8 @@ func (this *Files) SetReader(name string) error {
 		this.reader = this.defaultFile
 	}
 
-	uname := strings.ToUpper(name)
-	f, ok := this.openFiles[uname]
+	name = this.normPath(name)
+	f, ok := this.openFiles[name]
 	if !ok {
 		return errorFileNotOpen(name)
 	}
@@ -104,8 +229,8 @@ func (this *Files) SetWriter(name string) error {
 		this.writer = this.defaultFile
 	}
 
-	uname := strings.ToUpper(name)
-	f, ok := this.openFiles[uname]
+	name = this.normPath(name)
+	f, ok := this.openFiles[name]
 	if !ok {
 		return errorFileNotOpen(name)
 	}

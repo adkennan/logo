@@ -21,6 +21,7 @@ type Workspace struct {
 	turtle       *Turtle
 	glyphMap     *GlyphMap
 	console      *ConsoleScreen
+	editor       *Editor
 }
 
 func CreateWorkspace() *Workspace {
@@ -28,7 +29,7 @@ func CreateWorkspace() *Workspace {
 	if err != nil {
 		panic(err)
 	}
-	ws := &Workspace{nil, make(map[string]Procedure, 100), false, nil, nil, nil, nil, nil, nil}
+	ws := &Workspace{nil, make(map[string]Procedure, 100), false, nil, nil, nil, nil, nil, nil, nil}
 	ws.rootFrame = &RootFrame{ws, nil, nil, make(map[string]*Variable, 10)}
 	ws.broker = CreateMessageBroker()
 	ws.files = CreateFiles(path.Join(u.HomeDir, "logo"))
@@ -38,6 +39,7 @@ func CreateWorkspace() *Workspace {
 	ws.turtle = initTurtle(ws)
 	ws.glyphMap = initGlyphMap()
 	ws.console = initConsole(ws, ws.screen.screen.W(), ws.screen.screen.H())
+	ws.editor = initEditor(ws, ws.screen.screen.W(), ws.screen.screen.H())
 
 	ws.files.defaultFile = ws.console
 	ws.files.writer = ws.console

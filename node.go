@@ -92,13 +92,13 @@ func (this *ListNode) position() (int, int) { return this.line, this.col }
 
 func (this *ListNode) String() string {
 	s := "[ "
-	if this.firstChild != nil {
-		s += this.firstChild.String()
+	n := this.firstChild
+	for n != nil {
+		s += n.String() + " "
+		n = n.next()
 	}
-	s += " ]"
-	if this.next() != nil {
-		s += " " + this.next().String()
-	}
+	s += "]"
+
 	return s
 }
 
@@ -228,6 +228,31 @@ func evalInstructionList(frame Frame, node Node) error {
 	}
 
 	return nil
+}
+
+func evalList(frame Frame, node *ListNode) (*ListNode, error) {
+
+	var fn Node
+	var ln Node
+	var en Node
+	var err error
+	n := node.firstChild
+	for n != nil {
+		en, n, err = evaluateNode(frame, n, true)
+		if err != nil {
+			return nil, err
+		}
+		if fn == nil {
+			fn = en
+		} else {
+			ln.addNode(en)
+		}
+		ln = en
+	}
+
+	nln := newListNode(-1, -1, fn).(*ListNode)
+
+	return nln, nil
 }
 
 func nodesEqual(x, y Node, numericCompare bool) bool {

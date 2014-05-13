@@ -24,6 +24,11 @@ const (
 	K_END       = 0x117
 	K_PAGEUP    = 0x118
 	K_PAGEDOWN  = 0x119
+	K_ESCAPE    = 0x1b
+
+	K_F1 = 0x11a
+	K_F2 = 0x11b
+	K_F3 = 0x11c
 )
 
 type ConsoleScreen struct {
@@ -46,7 +51,7 @@ func initConsole(workspace *Workspace, w, h int) *ConsoleScreen {
 		0,
 		0,
 		0,
-		workspace.broker.Subscribe(MT_KeyPress)}
+		workspace.broker.Subscribe(MT_KeyPress, MT_EditStart, MT_EditStop)}
 
 	cs.sfcs[0].Clear()
 	cs.sfcs[1].Clear()
@@ -87,19 +92,34 @@ func (this *ConsoleScreen) Clear() {
 	this.cx = 0
 	this.cy = 0
 
-	this.channel.PublishId(MT_UpdateText)
+	this.channel.Publish(newRegionMessage(MT_UpdateText, s,
+		[]*Region{&Region{0, 0, s.W(), s.H()}}))
 }
 
 func (this *ConsoleScreen) ReadLine() (string, error) {
 	cursorPos := 0
 	chars := make([]rune, 0, 10)
 	this.drawEditLine(cursorPos, chars)
-
+	editActive := false
 	m := this.channel.Wait()
 	for ; m != nil; m = this.channel.Wait() {
 		switch ks := m.(type) {
+		case *MessageBase:
+			{
+				switch ks.MessageType() {
+				case MT_EditStart:
+					editActive = true
+				case MT_EditStop:
+					editActive = false
+					this.drawEditLine(cursorPos, chars)
+				}
+			}
 		case *KeyMessage:
 			{
+				if editActive {
+					continue
+				}
+
 				switch ks.Sym {
 				case K_RETURN:
 					line := string(chars)
@@ -126,7 +146,7 @@ func (this *ConsoleScreen) ReadLine() (string, error) {
 						cursorPos--
 					}
 				case K_DELETE:
-					if cursorPos < len(chars)-1 {
+					if cursorPos < len(chars) {
 						chars = append(chars[:cursorPos], chars[cursorPos+1:]...)
 					}
 				default:
@@ -168,6 +188,9 @@ func (this *ConsoleScreen) drawEditLine(cursorPos int, chars []rune) {
 
 	dst := this.sfcs[this.sfcIx]
 
+	sx := nx
+	w := len(chars) * gm.charWidth
+
 	this.clearEditLine()
 
 	for _, c := range chars {
@@ -180,7 +203,8 @@ func (this *ConsoleScreen) drawEditLine(cursorPos int, chars []rune) {
 		this.cx+((cursorPos+3)*gm.charWidth)-2,
 		ny+gm.charHeight)
 
-	this.channel.PublishId(MT_UpdateText)
+	this.channel.Publish(newRegionMessage(MT_UpdateText, dst,
+		[]*Region{&Region{sx, ny, w, gm.charHeight}}))
 }
 
 func (this *ConsoleScreen) Surface() Surface {
@@ -193,11 +217,17 @@ func (this *ConsoleScreen) Write(text string) error {
 	nx := this.cx * gm.charWidth
 	ny := this.cy * gm.charHeight
 
+	sx := nx
+	sy := ny
+	ex := nx + gm.charWidth
+	ey := ny + gm.charHeight
 	for _, c := range text {
 		if unicode.IsGraphic(c) {
 			nx = gm.renderGlyph(c, glyphStyleNormal, this.sfcs[this.sfcIx], nx, ny)
 			this.cx++
-
+			if nx > ex {
+				ex = nx
+			}
 		} else if c == '\n' {
 			this.cx = 0
 			nx = 0
@@ -217,11 +247,19 @@ func (this *ConsoleScreen) Write(text string) error {
 
 				this.cy--
 				ny -= gm.charHeight
+
+				sx = 0
+				sy = 0
+				ex = dst.W()
+			}
+			if ny > ey {
+				ey = ny
 			}
 		}
 	}
 
-	this.channel.PublishId(MT_UpdateText)
+	this.channel.Publish(newRegionMessage(MT_UpdateText, this.sfcs[this.sfcIx],
+		[]*Region{&Region{sx, sy, ex - sx, ey - sy}}))
 
 	return nil
 }

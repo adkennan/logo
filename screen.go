@@ -4,6 +4,7 @@ const (
 	screenModeText = iota
 	screenModeSplit
 	screenModeGraphic
+	screenModeEdit
 )
 
 const splitScreenSize = 4
@@ -22,7 +23,7 @@ func initScreen(workspace *Workspace) *Screen {
 	w := ss.W()
 	h := ss.H()
 
-	s := &Screen{ss, w, h, workspace, screenModeSplit, workspace.broker.Subscribe(MT_UpdateText, MT_UpdateGfx)}
+	s := &Screen{ss, w, h, workspace, screenModeSplit, workspace.broker.Subscribe()}
 
 	workspace.registerBuiltIn("FULLSCREEN", "FS", 0, _s_Fullscreen)
 	workspace.registerBuiltIn("TEXTSCREEN", "TS", 0, _s_Textscreen)
@@ -41,56 +42,95 @@ func (this *Screen) Update() {
 	t := this.ws.turtle
 
 	for m := this.channel.Wait(); m != nil; m = this.channel.Wait() {
-		switch m.MessageType() {
-		case MT_UpdateGfx:
+		switch rm := m.(type) {
+		case *MessageBase:
 			{
-				rm := (m).(*RegionMessage)
-
-				if this.screenMode == screenModeText {
-					continue
+				switch m.MessageType() {
+				case MT_EditStart:
+					this.screenMode = screenModeEdit
+				case MT_EditStop:
+					this.screenMode = screenModeSplit
 				}
 
-				if this.screenMode == screenModeSplit {
-					th := gm.charHeight * splitScreenSize
-
-					this.screen.SetClipRect(0, 0, this.w, this.h-th)
-				}
-
-				for _, r := range rm.regions {
-					this.screen.ClearRect(t.screenColor, r.x, r.y, r.w, r.h)
-					this.screen.DrawSurfacePart(r.x, r.y, rm.surface, r.x, r.y, r.w, r.h)
-				}
-				if t.turtleState == turtleStateShown {
-					this.DrawTurtle()
-				}
-
-				this.screen.ClearClipRect()
-
-				this.screen.Update()
 			}
-
-		case MT_UpdateText:
+		case *KeyMessage:
+			if this.screenMode != screenModeEdit {
+				switch rm.Sym {
+				case K_F1:
+					this.screenMode = screenModeSplit
+					this.Invalidate(MT_UpdateGfx)
+					this.Invalidate(MT_UpdateText)
+				case K_F2:
+					this.screenMode = screenModeGraphic
+					this.Invalidate(MT_UpdateGfx)
+				case K_F3:
+					this.screenMode = screenModeText
+					this.Invalidate(MT_UpdateText)
+				}
+			}
+		case *RegionMessage:
 			{
-				t := this.ws.turtle
+				switch m.MessageType() {
+				case MT_UpdateEdit:
+					{
+						if this.screenMode != screenModeEdit {
+							continue
+						}
+						for _, r := range rm.regions {
+							this.screen.ClearRect(t.screenColor, r.x, r.y, r.w, r.h)
+							this.screen.DrawSurfacePart(r.x, r.y, rm.surface, r.x, r.y, r.w, r.h)
+						}
+						this.screen.Update()
+					}
+				case MT_UpdateGfx:
+					{
+						if this.screenMode == screenModeText {
+							continue
+						}
 
-				gm := this.ws.glyphMap
-				c := this.ws.console
-				cs := c.Surface()
-				switch this.screenMode {
-				case screenModeText:
-					this.screen.DrawSurface(0, 0, cs)
-				case screenModeSplit:
-					th := gm.charHeight * splitScreenSize
+						if this.screenMode == screenModeSplit {
+							th := gm.charHeight * splitScreenSize
 
-					this.screen.DrawSurfacePart(0, this.h-th, cs,
-						0, (1+c.FirstLineOfSplitScreen())*gm.charHeight, this.w, th)
+							this.screen.SetClipRect(0, 0, this.w, this.h-th)
+						}
 
-					if t.turtleState == turtleStateShown {
-						this.DrawTurtle()
+						for _, r := range rm.regions {
+							this.screen.ClearRect(t.screenColor, r.x, r.y, r.w, r.h)
+							this.screen.DrawSurfacePart(r.x, r.y, rm.surface, r.x, r.y, r.w, r.h)
+						}
+						if t.turtleState == turtleStateShown {
+							this.DrawTurtle()
+						}
+
+						this.screen.ClearClipRect()
+
+						this.screen.Update()
+					}
+
+				case MT_UpdateText:
+					{
+						t := this.ws.turtle
+
+						gm := this.ws.glyphMap
+						c := this.ws.console
+						cs := c.Surface()
+						switch this.screenMode {
+						case screenModeText:
+							this.screen.DrawSurface(0, 0, cs)
+							this.screen.Update()
+						case screenModeSplit:
+							th := gm.charHeight * splitScreenSize
+
+							this.screen.DrawSurfacePart(0, this.h-th, cs,
+								0, (1+c.FirstLineOfSplitScreen())*gm.charHeight, this.w, th)
+
+							if t.turtleState == turtleStateShown {
+								this.DrawTurtle()
+							}
+							this.screen.Update()
+						}
 					}
 				}
-
-				this.screen.Update()
 			}
 		}
 	}
@@ -102,6 +142,17 @@ func (this *Screen) DrawTurtle() {
 	y := int(-t.y+float64(this.h/2)) - turtleSize
 
 	this.screen.DrawSurface(x, y, t.sprite)
+}
+
+func (this *Screen) Invalidate(msgId int) {
+	r := &Region{0, 0, this.w - 1, this.h - 1}
+	var sfc Surface
+	if msgId == MT_UpdateGfx {
+		sfc = this.ws.turtle.image
+	} else {
+		sfc = this.ws.console.Surface()
+	}
+	this.channel.Publish(newRegionMessage(msgId, sfc, []*Region{r}))
 }
 
 type Region struct {
@@ -203,7 +254,7 @@ func _s_Fullscreen(frame Frame, parameters []Node) (Node, error) {
 	ws := frame.workspace()
 	ws.screen.screenMode = screenModeGraphic
 
-	ws.broker.PublishId(MT_UpdateGfx)
+	ws.screen.Invalidate(MT_UpdateGfx)
 
 	return nil, nil
 }
@@ -213,7 +264,7 @@ func _s_Textscreen(frame Frame, parameters []Node) (Node, error) {
 	ws := frame.workspace()
 	ws.screen.screenMode = screenModeText
 
-	ws.broker.PublishId(MT_UpdateGfx)
+	ws.screen.Invalidate(MT_UpdateText)
 
 	return nil, nil
 }
@@ -223,7 +274,8 @@ func _s_Splitscreen(frame Frame, parameters []Node) (Node, error) {
 	ws := frame.workspace()
 	ws.screen.screenMode = screenModeSplit
 
-	ws.broker.PublishId(MT_UpdateGfx)
+	ws.screen.Invalidate(MT_UpdateGfx)
+	ws.screen.Invalidate(MT_UpdateText)
 
 	return nil, nil
 }

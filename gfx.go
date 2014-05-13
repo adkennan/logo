@@ -105,6 +105,7 @@ type Surface interface {
 	DrawLine(x1, y1, x2, y2 int)
 	DrawPoint(x, y int)
 	Fill(x1, y1, x2, y2 int)
+	FillTriangle(x1, y1, x2, y2, x3, y3 int)
 	Update()
 	W() int
 	H() int
@@ -122,10 +123,10 @@ func (this *sdlWindow) CreateSurface(w, h int) Surface {
 		int(w),
 		int(h),
 		32,
-		0x000000ff,
-		0x0000ff00,
+		0xff000000,
 		0x00ff0000,
-		0xff000000)
+		0x0000ff00,
+		0x000000ff)
 
 	return &sdlSurface{s, w, h, color.RGBA{0, 0, 0, 255}}
 }
@@ -154,7 +155,7 @@ func (this *sdlWindow) DrawSurfacePart(dx, dy int, sfc Surface, sx, sy, sw, sh i
 
 	this.win.Blit(dst, ss.s, src)
 
-	//	gfx.RectangleRGBA(this.win, int16(dx), int16(dy), int16(dx+sw), int16(dy+sh), 0, 255, 0, 255)
+	//gfx.RectangleRGBA(this.win, int16(dx), int16(dy), int16(dx+sw), int16(dy+sh), 0, 255, 0, 255)
 
 }
 
@@ -190,27 +191,47 @@ func (this *sdlWindow) H() int {
 	return this.h
 }
 
+const (
+	keyRepeatFirst = 20
+	keyRepeatSubs  = 3
+)
+
 func (this *sdlWindow) runEventLoop() {
 
 	sdl.EnableUNICODE(1)
 
 	running := true
+	var km *KeyMessage = nil
+	keyCount := 0
 	for running {
 		for event := sdl.PollEvent(); event != nil; event = sdl.PollEvent() {
 			switch e := event.(type) {
 			case *sdl.QuitEvent:
 				running = false
 			case *sdl.KeyboardEvent:
-				if e.Type == sdl.KEYDOWN {
+				switch e.Type {
+				case sdl.KEYDOWN:
 					var r rune
 					if e.Keysym.Unicode != 0 {
 						rs := utf16.Decode([]uint16{e.Keysym.Unicode})
 						r = rs[0]
 					}
-					m := &KeyMessage{MessageBase{MT_KeyPress}, e.Keysym.Sym, r}
-					this.b.Publish(m)
+					km = &KeyMessage{MessageBase{MT_KeyPress}, e.Keysym.Sym, r}
+					this.b.Publish(km)
+					keyCount = keyRepeatFirst
+
+				case sdl.KEYUP:
+					km = nil
 				}
 			}
+		}
+		if keyCount == 0 {
+			if km != nil {
+				this.b.Publish(km)
+				keyCount = keyRepeatSubs
+			}
+		} else {
+			keyCount--
 		}
 		sdl.Delay(20)
 	}
@@ -299,4 +320,8 @@ func (this *sdlSurface) Fill(x1, y1, x2, y2 int) {
 	r, g, b, a := this.c.RGBA()
 	gfx.BoxRGBA(this.s, int16(x1), int16(y1), int16(x2), int16(y2),
 		uint8(r), uint8(g), uint8(b), uint8(a))
+}
+
+func (this *sdlSurface) FillTriangle(x1, y1, x2, y2, x3, y3 int) {
+	gfx.FilledTrigonColor(this.s, int16(x1), int16(y1), int16(x2), int16(y2), int16(x3), int16(y3), toSdlColor(this.s.Format, this.c))
 }
