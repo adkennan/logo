@@ -3,7 +3,6 @@ package main
 import (
 	"bytes"
 	"fmt"
-	"image/color"
 	"strings"
 	"unicode"
 )
@@ -29,7 +28,7 @@ func initEditor(ws *Workspace, w, h int) *Editor {
 
 	ws.registerBuiltIn("EDIT", "", 1, _ed_Edit)
 
-	return &Editor{
+	e := &Editor{
 		ws,
 		c,
 		nil,
@@ -39,6 +38,36 @@ func initEditor(ws *Workspace, w, h int) *Editor {
 		0, 0, 0, 0,
 		img,
 		make(chan bool)}
+
+	return e
+}
+
+func (this *Editor) initEditorUi() {
+
+	gm := this.ws.glyphMap
+	gh := gm.charHeight
+	//gw := gm.charWidth
+
+	this.image.Clear()
+	this.image.SetColor(colorWhite)
+	this.image.DrawLine(0, this.image.H()-(gh*2), this.image.W(), this.image.H()-(gh*2))
+
+	this.writeStatus(0, "F1: Save    ESC: Cancel")
+
+	this.invalidate(0, 0, this.image.W(), this.image.H())
+}
+
+func (this *Editor) writeStatus(x int, text string) {
+
+	gm := this.ws.glyphMap
+	y := this.image.H() - ((gm.charHeight * 3) / 2)
+
+	x2 := x
+	for _, c := range text {
+		x2 = gm.renderGlyph(c, glyphStyleNormal, this.image, x2, y)
+	}
+
+	this.invalidate(x, y, x2, y+gm.charHeight)
 }
 
 func (this *Editor) StartEditor(content string) string {
@@ -51,7 +80,8 @@ func (this *Editor) StartEditor(content string) string {
 	this.sx2 = 0
 	this.sy2 = 0
 	this.clip = ""
-	this.image.Clear()
+
+	this.initEditorUi()
 
 	this.Insert(content)
 
@@ -59,9 +89,12 @@ func (this *Editor) StartEditor(content string) string {
 
 	go this.RunEditor()
 
-	<-this.done
+	r := <-this.done
 
-	return strings.Join(this.buffer, "\n")
+	if r {
+		return strings.Join(this.buffer, "\n")
+	}
+	return ""
 }
 
 func (this *Editor) Insert(content string) (linesInserted int) {
@@ -146,13 +179,15 @@ func (this *Editor) InsertRune(c rune) (linesInserted int) {
 	el := l[this.x:]
 	if c == '\n' {
 
+		this.buffer = append(this.buffer, "")
+		copy(this.buffer[this.y+1:], this.buffer[this.y:])
 		this.buffer[this.y] = sl
-		this.buffer = append(append(this.buffer[:this.y], el), this.buffer[this.y:]...)
+		this.buffer[this.y+1] = el
 		this.y++
 		this.x = 0
 		return 1
 	} else {
-		this.buffer[this.y] = fmt.Sprint(el, string(c), sl)
+		this.buffer[this.y] = fmt.Sprint(sl, string(c), el)
 		this.x++
 		return 0
 	}
@@ -168,7 +203,7 @@ func (this *Editor) DeleteRune() (linesDeleted int) {
 			return 1
 		}
 	} else {
-		this.buffer[this.y] = l[:this.x-1] + l[this.x:]
+		this.buffer[this.y] = l[:this.x] + l[this.x+1:]
 	}
 	return 0
 }
@@ -198,8 +233,8 @@ func (this *Editor) RenderLines(s, e int) {
 	gm := this.ws.glyphMap
 	gh := gm.charHeight
 	gw := gm.charWidth
-	lw := this.image.W() / gw
-	lc := this.image.H() / gh
+	lw := (this.image.W() - 2) / gw
+	lc := (this.image.H() - 2) / gh
 
 	if s > this.vy+lc || e < this.vy {
 		return
@@ -220,16 +255,19 @@ func (this *Editor) RenderLines(s, e int) {
 	y := (s - this.vy) * gh
 	sy := y
 
+	this.image.SetColor(colorBlack)
+	this.image.Fill(0, y, this.image.W(), (e-this.vy)*gh)
+
 	for _, l := range this.buffer[s:e] {
-		x := 0
+		x := gw
 		for cx, c := range l {
 			gs := glyphStyleNormal
 			if this.IsInSelection(cx, cy) {
 				gs = glyphStyleInverse
 			}
 			x = gm.renderGlyph(c, gs, this.image, x, y)
-			if x >= lw {
-				x = 0
+			if cx >= lw {
+				x = gw
 				y += gh
 			}
 		}
@@ -237,20 +275,24 @@ func (this *Editor) RenderLines(s, e int) {
 		y += gh
 	}
 
-	this.image.SetColor(color.RGBA{255, 255, 255, 255})
-	this.image.Fill((this.x*gm.charWidth)+2,
+	this.image.SetColor(colorWhite)
+	this.image.Fill(((this.x+1)*gm.charWidth)+2,
 		((this.y+1)*gm.charHeight)-2,
-		((this.x+1)*gm.charWidth)-2,
+		((this.x+2)*gm.charWidth)-2,
 		((this.y + 1) * gm.charHeight))
 
-	this.channel.Publish(newRegionMessage(MT_UpdateEdit, this.image, []*Region{&Region{0, sy, this.image.W(), y}}))
+	this.invalidate(0, sy, this.image.W(), y)
+}
+
+func (this *Editor) invalidate(x, y, w, h int) {
+	this.channel.Publish(newRegionMessage(MT_UpdateEdit, this.image, []*Region{&Region{x, y, w, h}}))
 }
 
 func (this *Editor) CursorLeft() bool {
 	if this.x > 0 {
 		this.x--
 		return true
-	} else if this.y > 1 {
+	} else if this.y > 0 {
 		this.y--
 		this.x = len(this.buffer[this.y])
 		return true
@@ -271,7 +313,7 @@ func (this *Editor) CursorRight() bool {
 }
 
 func (this *Editor) CursorUp() bool {
-	if this.y > 1 {
+	if this.y > 0 {
 		this.y--
 		if this.x > len(this.buffer[this.y]) {
 			this.x = len(this.buffer[this.y])
@@ -305,14 +347,14 @@ func (this *Editor) RunEditor() {
 	this.channel.Resume()
 	this.channel.PublishId(MT_EditStart)
 
-	this.image.Clear()
 	this.channel.Publish(newRegionMessage(MT_UpdateEdit, this.image, []*Region{&Region{0, 0, this.image.W(), this.image.H()}}))
 	this.RenderLines(0, len(this.buffer))
 
+	shouldSave := false
 	defer func() {
 		this.channel.Pause()
 		this.channel.PublishId(MT_EditStop)
-		this.done <- true
+		this.done <- shouldSave
 	}()
 
 	exit := false
@@ -348,6 +390,13 @@ func (this *Editor) RunEditor() {
 					}
 				case K_ESCAPE:
 					exit = true
+				case K_F1:
+					exit = true
+					shouldSave = true
+				case K_RETURN:
+					this.InsertRune('\n')
+					el = len(this.buffer)
+
 				default:
 					if ks.Char != 0 && unicode.IsGraphic(ks.Char) {
 						if this.InsertRune(ks.Char) > 0 {
@@ -362,7 +411,6 @@ func (this *Editor) RunEditor() {
 			}
 		}
 	}
-
 }
 
 func _ed_Edit(frame Frame, parameters []Node) (Node, error) {
@@ -377,7 +425,7 @@ func _ed_Edit(frame Frame, parameters []Node) (Node, error) {
 	for _, n := range names {
 		p := ws.findProcedure(strings.ToUpper(n.value))
 		if p == nil {
-			continue
+			b.WriteString("TO " + n.value + "\n\nEND\n\n")
 		}
 		switch ip := p.(type) {
 		case *InterpretedProcedure:
@@ -386,9 +434,7 @@ func _ed_Edit(frame Frame, parameters []Node) (Node, error) {
 		}
 	}
 
-	editedContent := ws.editor.StartEditor("a\n b\n  c\n  d\n") //b.String())
+	editedContent := ws.editor.StartEditor(b.String())
 
-	print(editedContent)
-
-	return nil, nil
+	return nil, frame.workspace().readString(editedContent)
 }

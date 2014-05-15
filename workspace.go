@@ -1,6 +1,8 @@
 package main
 
 import (
+	"bufio"
+	"bytes"
 	"os"
 	"os/user"
 	"path"
@@ -123,6 +125,56 @@ func (this *Workspace) RunInterpreter() {
 
 	l := this.broker.Subscribe(MT_Quit)
 	l.Wait()
+}
+
+func (this *Workspace) readString(text string) error {
+	b := bytes.NewBufferString(text)
+	s := bufio.NewScanner(b)
+
+	fw := this.files.writer
+	partial := ""
+	definingProc := false
+	for s.Scan() {
+		line := s.Text()
+		lu := strings.ToUpper(line)
+
+		if definingProc {
+			partial += "\n" + line
+			if lu == keywordEnd {
+				fn, err := ParseString(partial)
+				if err != nil {
+					return err
+				} else {
+					proc, _, err := readInterpretedProcedure(fn)
+					if err != nil {
+						return err
+					} else {
+						proc.source = partial
+						this.addProcedure(proc)
+						fw.Write(proc.name + " defined.\n")
+					}
+					partial = ""
+					definingProc = false
+				}
+			}
+		} else {
+			if line == "" {
+				continue
+			}
+			if strings.HasPrefix(lu, keywordTo) {
+				definingProc = true
+				partial = line
+			} else {
+
+				err := this.evaluate(line)
+				if err != nil {
+					return err
+				}
+			}
+		}
+	}
+
+	return s.Err()
 }
 
 func (this *Workspace) readFile() error {

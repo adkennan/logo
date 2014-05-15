@@ -50,6 +50,8 @@ func (this *Screen) Update() {
 					this.screenMode = screenModeEdit
 				case MT_EditStop:
 					this.screenMode = screenModeSplit
+					this.Invalidate(MT_UpdateGfx)
+					this.Invalidate(MT_UpdateText)
 				}
 
 			}
