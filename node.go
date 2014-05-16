@@ -214,22 +214,6 @@ func evalToBoolean(node Node) (bool, error) {
 	return false, errorBooleanExpected(node)
 }
 
-func evalInstructionList(frame Frame, node Node) error {
-
-	switch pn := node.(type) {
-
-	case *ListNode:
-		_, err := evaluateList(frame, pn)
-		if err != nil {
-			return err
-		}
-	default:
-		return errorListExpected(node)
-	}
-
-	return nil
-}
-
 func evalList(frame Frame, node *ListNode) (*ListNode, error) {
 
 	var fn Node

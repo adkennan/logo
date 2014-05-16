@@ -175,31 +175,43 @@ func (this *Editor) GetSelection() string {
 func (this *Editor) InsertRune(c rune) (linesInserted int) {
 
 	l := this.buffer[this.y]
-	sl := l[:this.x]
-	el := l[this.x:]
-	if c == '\n' {
-
-		this.buffer = append(this.buffer, "")
-		copy(this.buffer[this.y+1:], this.buffer[this.y:])
-		this.buffer[this.y] = sl
-		this.buffer[this.y+1] = el
-		this.y++
-		this.x = 0
-		return 1
-	} else {
-		this.buffer[this.y] = fmt.Sprint(sl, string(c), el)
+	if len(l) == 0 {
+		if c == '\n' {
+			this.buffer = append(this.buffer, "")
+			copy(this.buffer[this.y+1:], this.buffer[this.y:])
+			this.y++
+			this.x = 0
+			return 1
+		}
+		this.buffer[this.y] = string(c)
 		this.x++
-		return 0
+	} else {
+		sl := l[:this.x]
+		el := l[this.x:]
+		if c == '\n' {
+
+			this.buffer = append(this.buffer, "")
+			copy(this.buffer[this.y+1:], this.buffer[this.y:])
+			this.buffer[this.y] = sl
+			this.buffer[this.y+1] = el
+			this.y++
+			this.x = 0
+			return 1
+		} else {
+			this.buffer[this.y] = fmt.Sprint(sl, string(c), el)
+			this.x++
+		}
 	}
+	return 0
 }
 
 func (this *Editor) DeleteRune() (linesDeleted int) {
 
 	l := this.buffer[this.y]
 	if this.x == len(l) {
-		if this.y < len(this.buffer) {
-			this.buffer[this.y] = this.buffer[this.y+1]
-			this.buffer = append(this.buffer[:this.y], this.buffer[this.y+1:]...)
+		if this.y < len(this.buffer)-1 {
+			this.buffer[this.y] = this.buffer[this.y] + this.buffer[this.y+1]
+			this.buffer = append(this.buffer[:this.y+1], this.buffer[this.y+2:]...)
 			return 1
 		}
 	} else {
@@ -279,9 +291,12 @@ func (this *Editor) RenderLines(s, e int) {
 	this.image.Fill(((this.x+1)*gm.charWidth)+2,
 		((this.y+1)*gm.charHeight)-2,
 		((this.x+2)*gm.charWidth)-2,
-		((this.y + 1) * gm.charHeight))
+		((this.y+1)*gm.charHeight)-1)
 
 	this.invalidate(0, sy, this.image.W(), y)
+
+	this.writeStatus(this.image.W()/2, fmt.Sprintf("Line: %d Col: %d    ", this.y, this.x))
+	this.writeStatus(this.image.W()-(gm.charWidth*10), fmt.Sprintf("%d -> %d    ", s, e))
 }
 
 func (this *Editor) invalidate(x, y, w, h int) {
@@ -304,7 +319,7 @@ func (this *Editor) CursorRight() bool {
 	if this.x < len(this.buffer[this.y]) {
 		this.x++
 		return true
-	} else if this.y < len(this.buffer) {
+	} else if this.y < len(this.buffer)-1 {
 		this.y++
 		this.x = 0
 		return true
@@ -315,8 +330,8 @@ func (this *Editor) CursorRight() bool {
 func (this *Editor) CursorUp() bool {
 	if this.y > 0 {
 		this.y--
-		if this.x > len(this.buffer[this.y]) {
-			this.x = len(this.buffer[this.y])
+		if this.x >= len(this.buffer[this.y]) {
+			this.x = intMax(0, len(this.buffer[this.y]))
 		}
 		return true
 	}
@@ -324,10 +339,10 @@ func (this *Editor) CursorUp() bool {
 }
 
 func (this *Editor) CursorDown() bool {
-	if this.y < len(this.buffer) {
+	if this.y < len(this.buffer)-1 {
 		this.y++
-		if this.x > len(this.buffer[this.y]) {
-			this.x = len(this.buffer[this.y])
+		if this.x >= len(this.buffer[this.y]) {
+			this.x = intMax(0, len(this.buffer[this.y]))
 		}
 		return true
 	}
@@ -361,7 +376,7 @@ func (this *Editor) RunEditor() {
 	m := this.channel.Wait()
 	for ; m != nil && !exit; m = this.channel.Wait() {
 		sl := this.y
-		el := sl + 1
+		el := -1
 		switch ks := m.(type) {
 		case *KeyMessage:
 			{
@@ -404,10 +419,7 @@ func (this *Editor) RunEditor() {
 						}
 					}
 				}
-				if this.y < sl {
-					sl = this.y
-				}
-				this.RenderLines(sl, el)
+				this.RenderLines(intMin(sl, this.y), intMax(intMax(sl, el), this.y)+1)
 			}
 		}
 	}

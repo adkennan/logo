@@ -71,3 +71,18 @@ func TestUnclosedList(t *testing.T) {
 		t.Errorf("Got \"%s\"", n)
 	}
 }
+
+func TestParseExpression(t *testing.T) {
+	n, err := ParseString("1 + 1")
+	assert(t, n, err, "1 + 1")
+}
+
+func TestParseExpressionNoSpaceAfter(t *testing.T) {
+	n, err := ParseString("1+ 1")
+	assert(t, n, err, "1 + 1")
+}
+
+func TestParseExpressionNoSpaceBefore(t *testing.T) {
+	n, err := ParseString("1 +1")
+	assert(t, n, err, "1 + 1")
+}

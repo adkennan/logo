@@ -236,6 +236,7 @@ func readWord(r *bufio.Reader, line, col *int) (n Node, err error) {
 					}
 					break
 				}
+				break
 			} else {
 				r.UnreadRune()
 				break

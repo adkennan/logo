@@ -16,13 +16,11 @@ type Frame interface {
 	depth() int
 	caller() *WordNode
 	eval(parameters []Node) (Node, error)
-	setReturnValue(returnVal Node)
 	setTestValue(node Node)
 	getTestValue() Node
 	createLocal(name string)
 	setVariable(name string, value Node)
 	getVariable(name string) Node
-	stop()
 }
 
 type Procedure interface {
@@ -43,7 +41,7 @@ func (this *BuiltInProcedure) parameterCount() int {
 }
 
 func (this *BuiltInProcedure) createFrame(parentFrame Frame, caller *WordNode) Frame {
-	return &BuiltInFrame{parentFrame.workspace(), parentFrame, parentFrame.depth() + 1, caller, this.realProc, make(map[string]*Variable)}
+	return &BuiltInFrame{parentFrame.workspace(), parentFrame, parentFrame.depth() + 1, caller, this.realProc, make(map[string]*Variable), this.name}
 }
 
 type BuiltInFrame struct {
@@ -53,6 +51,7 @@ type BuiltInFrame struct {
 	callerNode *WordNode
 	realProc   evaluator
 	vars       map[string]*Variable
+	name       string
 }
 
 func (this *BuiltInFrame) parentFrame() Frame {
@@ -73,12 +72,6 @@ func (this *BuiltInFrame) caller() *WordNode {
 
 func (this *BuiltInFrame) eval(parameters []Node) (Node, error) {
 	return this.realProc(this, parameters)
-}
-
-func (this *BuiltInFrame) setReturnValue(returnVal Node) {
-}
-
-func (this *BuiltInFrame) stop() {
 }
 
 func (this *BuiltInFrame) setTestValue(node Node) {
@@ -140,22 +133,8 @@ func (this *RootFrame) caller() *WordNode {
 
 func (this *RootFrame) eval(parameters []Node) (Node, error) {
 
-	var err error
-	var lastRetVal Node
-	for n := this.node; n != nil; {
-		lastRetVal, n, err = callProcedure(this, n, true)
-		if err != nil {
-			return nil, err
-		}
-	}
-
-	return lastRetVal, nil
-}
-
-func (this *RootFrame) setReturnValue(returnVal Node) {
-}
-
-func (this *RootFrame) stop() {
+	ln := newListNode(-1, -1, this.node)
+	return evalInstructionList(this, ln, false)
 }
 
 func (this *RootFrame) setTestValue(node Node) {
@@ -227,10 +206,13 @@ func (this *InterpretedFrame) eval(parameters []Node) (Node, error) {
 	}
 
 	var err error
-	for n := this.procedure.firstNode; n != nil && !this.exit; {
+	for n := this.procedure.firstNode; n != nil; {
 		_, n, err = callProcedure(this, n, true)
 		if err != nil {
 			return nil, err
+		}
+		if this.exit {
+			break
 		}
 	}
 
@@ -331,6 +313,8 @@ func callProcedure(frame Frame, node Node, withInfix bool) (Node, Node, error) {
 
 func evaluateList(frame Frame, list *ListNode) (Node, error) {
 
+	procFrame, _ := findInterpretedFrame(frame)
+
 	var fn Node = nil
 	var cn Node = nil
 	var tn Node = nil
@@ -347,9 +331,42 @@ func evaluateList(frame Frame, list *ListNode) (Node, error) {
 			cn.addNode(tn)
 		}
 		cn = tn
+
+		if procFrame != nil && procFrame.exit {
+			break
+		}
 	}
 
 	return newListNode(list.line, list.col, fn), nil
+}
+
+func evalInstructionList(frame Frame, node Node, canReturn bool) (Node, error) {
+
+	switch ln := node.(type) {
+	case *WordNode:
+		return nil, errorListExpected(node)
+	case *ListNode:
+		procFrame, _ := findInterpretedFrame(frame)
+		var v Node
+		var err error
+		for n := ln.firstChild; n != nil; {
+			v, n, err = evaluateNode(frame, n, true)
+			if err != nil {
+				return nil, err
+			}
+			if v != nil {
+				if canReturn {
+					return v, nil
+				}
+				return nil, errorReturnValueUnused(v)
+			}
+			if procFrame != nil && procFrame.exit {
+				return nil, nil
+			}
+		}
+	}
+
+	return nil, nil
 }
 
 var infixOps []string = []string{"+", "-", "*", "/", "(", ")", "=", "<>", "<", ">", "<=", ">=", "OR", "AND"}
@@ -620,4 +637,27 @@ func readInterpretedProcedure(node Node) (*InterpretedProcedure, Node, error) {
 	}
 
 	return &InterpretedProcedure{strings.ToUpper(procName), params, firstNode, "", false}, n.next(), nil
+}
+
+func findInterpretedFrame(frame Frame) (*InterpretedFrame, error) {
+
+	orig := frame
+
+	for {
+		switch f := frame.(type) {
+		case *InterpretedFrame:
+			return f, nil
+		case *RootFrame:
+			c := orig.caller()
+			if c == nil {
+				return nil, nil
+			}
+			return nil, errorNoInterpretedFrame(c)
+		case *BuiltInFrame:
+			frame = frame.parentFrame()
+
+		}
+	}
+
+	return nil, errorNoInterpretedFrame(orig.caller())
 }

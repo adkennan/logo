@@ -26,7 +26,7 @@ func errorProcedureNotFound(node Node, name string) error {
 }
 
 func errorProcedureExpected(node Node) error {
-	return toError(5, node, "Procedure expected.")
+	return toError(5, node, "Procedure expected")
 }
 
 func errorNotEnoughParameters(caller *WordNode, node Node) error {
@@ -57,8 +57,8 @@ func errorVariableNotFound(node Node, name string) error {
 	return toError(12, node, name+" has no value.")
 }
 
-func errorReturnValueUnused(node Node, value Node) error {
-	return toError(13, node, "You don't say what to do with "+value.String())
+func errorReturnValueUnused(node Node) error {
+	return toError(13, node, "You don't say what to do with "+node.String())
 }
 
 func errorBadInput(value Node) error {
@@ -87,4 +87,8 @@ func errorNotDir(path string) error {
 
 func errorNotFile(path string) error {
 	return toError(20, nil, path+" is not a file.")
+}
+
+func errorNoInterpretedFrame(node *WordNode) error {
+	return toError(21, node, "Can only use "+node.value+" inside a procedure.")
 }

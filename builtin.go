@@ -21,12 +21,21 @@ var randomMax Node = newWordNode(-1, -1, "10", true)
 var traceEnabled bool
 
 func _bi_Output(frame Frame, parameters []Node) (Node, error) {
-	frame.parentFrame().setReturnValue(parameters[0])
+
+	f, err := findInterpretedFrame(frame)
+	if err != nil {
+		return nil, err
+	}
+	f.setReturnValue(parameters[0])
 	return nil, nil
 }
 
 func _bi_Stop(frame Frame, parameters []Node) (Node, error) {
-	frame.parentFrame().stop()
+	f, err := findInterpretedFrame(frame)
+	if err != nil {
+		return nil, err
+	}
+	f.stop()
 	return nil, nil
 }
 
@@ -39,7 +48,10 @@ func _bi_Repeat(frame Frame, parameters []Node) (Node, error) {
 	nn := int64(n)
 
 	for ix := int64(0); ix < nn; ix++ {
-		evalInstructionList(frame, parameters[1])
+		_, err = evalInstructionList(frame, parameters[1], false)
+		if err != nil {
+			return nil, err
+		}
 	}
 
 	return nil, nil
@@ -79,7 +91,7 @@ func _bi_If(frame Frame, parameters []Node) (Node, error) {
 	}
 
 	if r {
-		return nil, evalInstructionList(frame, parameters[1])
+		return evalInstructionList(frame, parameters[1], true)
 	}
 
 	return nil, nil
@@ -114,9 +126,9 @@ func _bi_IfElse(frame Frame, parameters []Node) (Node, error) {
 	}
 
 	if r {
-		return nil, evalInstructionList(frame, parameters[1])
+		return evalInstructionList(frame, parameters[1], true)
 	} else {
-		return nil, evalInstructionList(frame, parameters[2])
+		return evalInstructionList(frame, parameters[2], true)
 	}
 }
 
@@ -401,10 +413,7 @@ func _bi_IfTrue(frame Frame, parameters []Node) (Node, error) {
 	}
 
 	if nodesEqual(n, trueNode, false) {
-		err := evalInstructionList(frame, parameters[0])
-		if err != nil {
-			return nil, err
-		}
+		return evalInstructionList(frame, parameters[0], true)
 	}
 	return nil, nil
 }
@@ -417,10 +426,7 @@ func _bi_IfFalse(frame Frame, parameters []Node) (Node, error) {
 	}
 
 	if nodesEqual(n, falseNode, false) {
-		err := evalInstructionList(frame, parameters[0])
-		if err != nil {
-			return nil, err
-		}
+		return evalInstructionList(frame, parameters[0], true)
 	}
 	return nil, nil
 }
@@ -848,7 +854,7 @@ func _bi_Wait(frame Frame, parameters []Node) (Node, error) {
 
 func _bi_Run(frame Frame, parameters []Node) (Node, error) {
 
-	return nil, evalInstructionList(frame, parameters[0])
+	return evalInstructionList(frame, parameters[0], false)
 }
 
 func _bi_Po(frame Frame, parameters []Node) (Node, error) {
@@ -1404,7 +1410,7 @@ func _bi_Pofile(frame Frame, parameters []Node) (Node, error) {
 func registerBuiltInProcedures(workspace *Workspace) {
 
 	workspace.registerBuiltIn("OUTPUT", "OP", 1, _bi_Output)
-	workspace.registerBuiltIn("STOP", "", 0, _bi_Output)
+	workspace.registerBuiltIn("STOP", "", 0, _bi_Stop)
 
 	workspace.registerBuiltIn("PRINT", "PR", 1, _bi_Print)
 	workspace.registerBuiltIn("FPRINT", "FP", 1, _bi_FPrint)

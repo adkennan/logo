@@ -112,9 +112,6 @@ func (this *Workspace) evaluate(source string) error {
 	if err != nil {
 		return err
 	}
-	if n != nil {
-		errorReturnValueUnused(this.rootFrame.node, n)
-	}
 	return nil
 }
 
