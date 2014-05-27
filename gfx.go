@@ -119,7 +119,7 @@ type sdlWindow struct {
 
 func (this *sdlWindow) CreateSurface(w, h int) Surface {
 
-	s := sdl.CreateRGBSurface(sdl.SWSURFACE,
+	s := sdl.CreateRGBSurface(sdl.HWSURFACE,
 		int(w),
 		int(h),
 		32,
@@ -198,6 +198,10 @@ const (
 func (this *sdlWindow) runEventLoop() {
 
 	sdl.EnableUNICODE(1)
+	defer func() {
+		this.b.PublishId(MT_Quit)
+		sdl.Quit()
+	}()
 
 	running := true
 	var km *KeyMessage = nil
@@ -235,11 +239,9 @@ func (this *sdlWindow) runEventLoop() {
 		sdl.Delay(20)
 	}
 
-	this.b.PublishId(MT_Quit)
-	sdl.Quit()
 }
 
-func newWindow(broker *MessageBroker) Window {
+func newWindow(broker *MessageBroker, ww, wh int) Window {
 
 	if sdl.Init(sdl.INIT_EVERYTHING) != 0 {
 		panic(sdl.GetError())
@@ -249,13 +251,19 @@ func newWindow(broker *MessageBroker) Window {
 	w := int(i.Current_w)
 	h := int(i.Current_h)
 
-	s := sdl.SetVideoMode(w, h, 32, sdl.RESIZABLE)
+	if ww == 0 || wh == 0 {
+		ww = w
+		wh = h
+	}
+	s := sdl.SetVideoMode(ww, wh, 32, sdl.RESIZABLE)
 
-	sdl.WM_ToggleFullScreen(s)
+	if ww == w && wh == h {
+		sdl.WM_ToggleFullScreen(s)
+	}
 
 	sdl.ShowCursor(0)
 
-	win := &sdlWindow{broker, s, w, h}
+	win := &sdlWindow{broker, s, ww, wh}
 
 	go win.runEventLoop()
 

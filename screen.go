@@ -17,11 +17,11 @@ type Screen struct {
 	channel    *Channel
 }
 
-func initScreen(workspace *Workspace) *Screen {
+func initScreen(workspace *Workspace, w, h int) *Screen {
 
-	ss := newWindow(workspace.broker)
-	w := ss.W()
-	h := ss.H()
+	ss := newWindow(workspace.broker, w, h)
+	w = ss.W()
+	h = ss.H()
 
 	s := &Screen{ss, w, h, workspace, screenModeSplit, workspace.broker.Subscribe()}
 
@@ -251,27 +251,27 @@ func newRegionMessage(messageType int, surface Surface, regions []*Region) *Regi
 	return &RegionMessage{MessageBase{messageType}, surface, regions}
 }
 
-func _s_Fullscreen(frame Frame, parameters []Node) (Node, error) {
+func _s_Fullscreen(frame Frame, parameters []Node) *CallResult {
 
 	ws := frame.workspace()
 	ws.screen.screenMode = screenModeGraphic
 
 	ws.screen.Invalidate(MT_UpdateGfx)
 
-	return nil, nil
+	return nil
 }
 
-func _s_Textscreen(frame Frame, parameters []Node) (Node, error) {
+func _s_Textscreen(frame Frame, parameters []Node) *CallResult {
 
 	ws := frame.workspace()
 	ws.screen.screenMode = screenModeText
 
 	ws.screen.Invalidate(MT_UpdateText)
 
-	return nil, nil
+	return nil
 }
 
-func _s_Splitscreen(frame Frame, parameters []Node) (Node, error) {
+func _s_Splitscreen(frame Frame, parameters []Node) *CallResult {
 
 	ws := frame.workspace()
 	ws.screen.screenMode = screenModeSplit
@@ -279,5 +279,5 @@ func _s_Splitscreen(frame Frame, parameters []Node) (Node, error) {
 	ws.screen.Invalidate(MT_UpdateGfx)
 	ws.screen.Invalidate(MT_UpdateText)
 
-	return nil, nil
+	return nil
 }

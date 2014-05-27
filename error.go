@@ -6,6 +6,12 @@ import (
 )
 
 func toError(code int, node Node, message string) error {
+	if node != nil {
+		l, c := node.position()
+		if l >= 0 && c >= 0 {
+			return errors.New(fmt.Sprintf("(%d,%d): %s", l, c, message))
+		}
+	}
 	return errors.New(message)
 }
 
@@ -54,6 +60,7 @@ func errorNoCurrentTestValue(node Node) error {
 }
 
 func errorVariableNotFound(node Node, name string) error {
+	//	panic(name + " has no value.")
 	return toError(12, node, name+" has no value.")
 }
 
@@ -91,4 +98,8 @@ func errorNotFile(path string) error {
 
 func errorNoInterpretedFrame(node *WordNode) error {
 	return toError(21, node, "Can only use "+node.value+" inside a procedure.")
+}
+
+func errorUserStopped(node Node) error {
+	return toError(22, node, "Stopped.")
 }

@@ -3,6 +3,7 @@ package main
 import (
 	"bufio"
 	"bytes"
+	"fmt"
 	"os"
 	"os/user"
 	"path"
@@ -24,20 +25,22 @@ type Workspace struct {
 	glyphMap     *GlyphMap
 	console      *ConsoleScreen
 	editor       *Editor
+	currentFrame Frame
 }
 
-func CreateWorkspace() *Workspace {
+func CreateWorkspace(w, h int) *Workspace {
 	u, err := user.Current()
 	if err != nil {
 		panic(err)
 	}
-	ws := &Workspace{nil, make(map[string]Procedure, 100), false, nil, nil, nil, nil, nil, nil, nil}
+	ws := &Workspace{nil, make(map[string]Procedure, 100), false, nil, nil, nil, nil, nil, nil, nil, nil}
 	ws.rootFrame = &RootFrame{ws, nil, nil, make(map[string]*Variable, 10)}
+	ws.currentFrame = ws.rootFrame
 	ws.broker = CreateMessageBroker()
 	ws.files = CreateFiles(path.Join(u.HomeDir, "logo"))
 	registerBuiltInProcedures(ws)
 
-	ws.screen = initScreen(ws)
+	ws.screen = initScreen(ws, w, h)
 	ws.turtle = initTurtle(ws)
 	ws.glyphMap = initGlyphMap()
 	ws.console = initConsole(ws, ws.screen.screen.W(), ws.screen.screen.H())
@@ -49,7 +52,37 @@ func CreateWorkspace() *Workspace {
 
 	ws.screen.Open()
 
+	go ws.listen()
+
 	return ws
+}
+
+func (this *Workspace) listen() {
+
+	c := this.broker.Subscribe(MT_KeyPress, MT_EditStart, MT_EditStop)
+
+	listening := true
+	for m := c.Wait(); c != nil; m = c.Wait() {
+		switch rm := m.(type) {
+		case *MessageBase:
+			switch m.MessageType() {
+			case MT_EditStart:
+				listening = false
+			case MT_EditStop:
+				listening = true
+			}
+		case *KeyMessage:
+			switch rm.Sym {
+			case K_ESCAPE:
+				if listening && this.currentFrame != nil {
+					procFrame, _ := findInterpretedFrame(this.currentFrame)
+					if procFrame != nil {
+						procFrame.abort()
+					}
+				}
+			}
+		}
+	}
 }
 
 func (this *Workspace) Screen() *Screen { return this.screen }
@@ -73,7 +106,7 @@ func (this *Workspace) trace(depth int, text string) error {
 	if !this.traceEnabled {
 		return nil
 	}
-	err := this.files.writer.Write(strings.Repeat(" ", depth) + text)
+	err := this.files.writer.Write(strings.Repeat(" ", depth) + "(" + fmt.Sprint(depth) + "):" + text + "\n")
 	return err
 }
 func (this *Workspace) addProcedure(proc *InterpretedProcedure) {
@@ -108,9 +141,9 @@ func (this *Workspace) evaluate(source string) error {
 		this.rootFrame.node = nil
 	}()
 
-	n, err = this.rootFrame.eval(make([]Node, 0, 0))
-	if err != nil {
-		return err
+	rv := this.rootFrame.eval(make([]Node, 0, 0))
+	if rv.hasError() {
+		return rv.err
 	}
 	return nil
 }

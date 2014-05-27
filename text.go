@@ -198,9 +198,9 @@ func (this *ConsoleScreen) drawEditLine(cursorPos int, chars []rune) {
 	}
 
 	dst.SetColor(color.RGBA{255, 255, 255, 255})
-	dst.Fill(this.cx+((cursorPos+2)*gm.charWidth)+2,
+	dst.Fill(2+(this.cx+cursorPos)*gm.charWidth,
 		ny+gm.charHeight-2,
-		this.cx+((cursorPos+3)*gm.charWidth)-2,
+		((this.cx+cursorPos+1)*gm.charWidth)-2,
 		ny+gm.charHeight)
 
 	this.channel.Publish(newRegionMessage(MT_UpdateText, dst,
@@ -228,7 +228,8 @@ func (this *ConsoleScreen) Write(text string) error {
 			if nx > ex {
 				ex = nx
 			}
-		} else if c == '\n' {
+		}
+		if c == '\n' || nx >= this.sfcs[this.sfcIx].W() {
 			this.cx = 0
 			nx = 0
 			this.cy++
@@ -272,9 +273,9 @@ func (this *ConsoleScreen) IsInteractive() bool {
 	return true
 }
 
-func _c_ClearText(frame Frame, parameters []Node) (Node, error) {
+func _c_ClearText(frame Frame, parameters []Node) *CallResult {
 
 	frame.workspace().console.Clear()
 
-	return nil, nil
+	return nil
 }

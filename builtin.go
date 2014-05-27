@@ -20,109 +20,120 @@ var randomMax Node = newWordNode(-1, -1, "10", true)
 
 var traceEnabled bool
 
-func _bi_Output(frame Frame, parameters []Node) (Node, error) {
+func _bi_Output(frame Frame, parameters []Node) *CallResult {
 
 	f, err := findInterpretedFrame(frame)
 	if err != nil {
-		return nil, err
+		return errorResult(err)
 	}
 	f.setReturnValue(parameters[0])
-	return nil, nil
+	return stopResult()
 }
 
-func _bi_Stop(frame Frame, parameters []Node) (Node, error) {
+func _bi_Stop(frame Frame, parameters []Node) *CallResult {
 	f, err := findInterpretedFrame(frame)
 	if err != nil {
-		return nil, err
+		return errorResult(err)
 	}
+
 	f.stop()
-	return nil, nil
+	return stopResult()
 }
 
-func _bi_Repeat(frame Frame, parameters []Node) (Node, error) {
+func _bi_Repeat(frame Frame, parameters []Node) *CallResult {
 
 	n, err := evalToNumber(parameters[0])
 	if err != nil {
-		return nil, err
+		return errorResult(err)
 	}
 	nn := int64(n)
 
 	for ix := int64(0); ix < nn; ix++ {
-		_, err = evalInstructionList(frame, parameters[1], false)
-		if err != nil {
-			return nil, err
+		cr := evalInstructionList(frame, parameters[1], false)
+		if cr != nil && cr.shouldStop() {
+			return cr
 		}
 	}
 
-	return nil, nil
+	return nil
 }
 
-func _bi_Print(frame Frame, parameters []Node) (Node, error) {
+func _bi_Print(frame Frame, parameters []Node) *CallResult {
 
 	printNode(frame.workspace(), parameters[0], false)
 	frame.workspace().print("\n")
-	return nil, nil
+	return nil
 }
 
-func _bi_FPrint(frame Frame, parameters []Node) (Node, error) {
+func _bi_FPrint(frame Frame, parameters []Node) *CallResult {
 
 	printNode(frame.workspace(), parameters[0], true)
 	frame.workspace().print("\n")
-	return nil, nil
+	return nil
 }
 
-func _bi_Type(frame Frame, parameters []Node) (Node, error) {
+func _bi_Type(frame Frame, parameters []Node) *CallResult {
 
 	printNode(frame.workspace(), parameters[0], false)
-	return nil, nil
+	return nil
 }
 
-func _bi_FType(frame Frame, parameters []Node) (Node, error) {
+func _bi_FType(frame Frame, parameters []Node) *CallResult {
 
 	printNode(frame.workspace(), parameters[0], true)
-	return nil, nil
+	return nil
 }
 
-func _bi_If(frame Frame, parameters []Node) (Node, error) {
+func _bi_If(frame Frame, parameters []Node) *CallResult {
 
 	r, err := evalToBoolean(parameters[0])
 	if err != nil {
-		return nil, err
+		return errorResult(err)
 	}
 
 	if r {
 		return evalInstructionList(frame, parameters[1], true)
 	}
 
-	return nil, nil
+	return nil
 }
 
-func _bi_ReadList(frame Frame, parameters []Node) (Node, error) {
+func _bi_ReadList(frame Frame, parameters []Node) *CallResult {
 
 	line, err := frame.workspace().files.reader.ReadLine()
 	if err != nil {
-		return nil, err
+		return errorResult(err)
 	}
-	return ParseString("[ " + line + " ]")
+	n, err := ParseString("[ " + line + " ]")
+	if err != nil {
+		return errorResult(err)
+	}
+	n.setLiteral()
+	return returnResult(n)
 }
 
-func _bi_Request(frame Frame, parameters []Node) (Node, error) {
+func _bi_Request(frame Frame, parameters []Node) *CallResult {
 
 	fw := frame.workspace().files.reader
 	fr := frame.workspace().files.writer
 	fw.Write(promptPrimary)
 	line, err := fr.ReadLine()
 	if err != nil {
-		return nil, err
+		return errorResult(err)
 	}
-	return ParseString("[ " + line + " ]")
+	n, err := ParseString("[ " + line + " ]")
+	if err != nil {
+		return errorResult(err)
+	}
+	n.setLiteral()
+	return returnResult(n)
 }
 
-func _bi_IfElse(frame Frame, parameters []Node) (Node, error) {
+func _bi_IfElse(frame Frame, parameters []Node) *CallResult {
 
 	r, err := evalToBoolean(parameters[0])
 	if err != nil {
-		return nil, err
+		return errorResult(err)
 	}
 
 	if r {
@@ -132,118 +143,118 @@ func _bi_IfElse(frame Frame, parameters []Node) (Node, error) {
 	}
 }
 
-func _bi_Sum(frame Frame, parameters []Node) (Node, error) {
+func _bi_Sum(frame Frame, parameters []Node) *CallResult {
 
 	x, y, err := evalNumericParams(parameters[0], parameters[1])
 	if err != nil {
-		return nil, err
+		return errorResult(err)
 	}
 
-	return createNumericNode(x + y), nil
+	return returnResult(createNumericNode(x + y))
 }
 
-func _bi_Difference(frame Frame, parameters []Node) (Node, error) {
+func _bi_Difference(frame Frame, parameters []Node) *CallResult {
 
 	var x, y float64
 	var err error
 	x, y, err = evalNumericParams(parameters[0], parameters[1])
 	if err != nil {
-		return nil, err
+		return errorResult(err)
 	}
 
 	if frame.caller().isInfix {
-		return createNumericNode(y - x), nil
+		return returnResult(createNumericNode(y - x))
 	}
-	return createNumericNode(x - y), nil
+	return returnResult(createNumericNode(x - y))
 }
 
-func _bi_Product(frame Frame, parameters []Node) (Node, error) {
+func _bi_Product(frame Frame, parameters []Node) *CallResult {
 
 	x, y, err := evalNumericParams(parameters[0], parameters[1])
 	if err != nil {
-		return nil, err
+		return errorResult(err)
 	}
 
-	return createNumericNode(x * y), nil
+	return returnResult(createNumericNode(x * y))
 }
 
-func _bi_Quotient(frame Frame, parameters []Node) (Node, error) {
+func _bi_Quotient(frame Frame, parameters []Node) *CallResult {
 
 	x, y, err := evalNumericParams(parameters[0], parameters[1])
 	if err != nil {
-		return nil, err
+		return errorResult(err)
 	}
 
 	if frame.caller().isInfix {
-		return createNumericNode(y / x), nil
+		return returnResult(createNumericNode(y / x))
 	}
-	return createNumericNode(x / y), nil
+	return returnResult(createNumericNode(x / y))
 }
 
-func _bi_Remainder(frame Frame, parameters []Node) (Node, error) {
+func _bi_Remainder(frame Frame, parameters []Node) *CallResult {
 
 	x, y, err := evalNumericParams(parameters[0], parameters[1])
 	if err != nil {
-		return nil, err
+		return errorResult(err)
 	}
 
-	return createNumericNode(float64(int64(x) % int64(y))), nil
+	return returnResult(createNumericNode(float64(int64(x) % int64(y))))
 }
 
-func _bi_Maximum(frame Frame, parameters []Node) (Node, error) {
+func _bi_Maximum(frame Frame, parameters []Node) *CallResult {
 
 	x, y, err := evalNumericParams(parameters[0], parameters[1])
 	if err != nil {
-		return nil, err
+		return errorResult(err)
 	}
 
-	return createNumericNode(math.Max(x, y)), nil
+	return returnResult(createNumericNode(math.Max(x, y)))
 }
 
-func _bi_Minimum(frame Frame, parameters []Node) (Node, error) {
+func _bi_Minimum(frame Frame, parameters []Node) *CallResult {
 
 	x, y, err := evalNumericParams(parameters[0], parameters[1])
 	if err != nil {
-		return nil, err
+		return errorResult(err)
 	}
 
-	return createNumericNode(math.Min(x, y)), nil
+	return returnResult(createNumericNode(math.Min(x, y)))
 }
 
-func _bi_Equalp(frame Frame, parameters []Node) (Node, error) {
+func _bi_Equalp(frame Frame, parameters []Node) *CallResult {
 
 	x := parameters[0]
 	y := parameters[1]
 
 	if nodesEqual(x, y, true) {
-		return trueNode, nil
+		return returnResult(trueNode)
 	}
-	return falseNode, nil
+	return returnResult(falseNode)
 }
 
-func _bi_Is(frame Frame, parameters []Node) (Node, error) {
+func _bi_Is(frame Frame, parameters []Node) *CallResult {
 
 	x := parameters[0]
 	y := parameters[1]
 
 	if nodesEqual(x, y, false) {
-		return trueNode, nil
+		return returnResult(trueNode)
 	}
-	return falseNode, nil
+	return returnResult(falseNode)
 }
 
-func _bi_NotEqualp(frame Frame, parameters []Node) (Node, error) {
+func _bi_NotEqualp(frame Frame, parameters []Node) *CallResult {
 
 	x := parameters[0]
 	y := parameters[1]
 
 	if nodesEqual(x, y, true) {
-		return falseNode, nil
+		return returnResult(falseNode)
 	}
-	return trueNode, nil
+	return returnResult(trueNode)
 }
 
-func _bi_Greaterp(frame Frame, parameters []Node) (Node, error) {
+func _bi_Greaterp(frame Frame, parameters []Node) *CallResult {
 
 	nx, ex := evalToNumber(parameters[0])
 	ny, ey := evalToNumber(parameters[1])
@@ -251,12 +262,12 @@ func _bi_Greaterp(frame Frame, parameters []Node) (Node, error) {
 	infix := frame.caller().isInfix
 
 	if ex == nil && ey == nil && ((infix && nx < ny) || (!infix && nx > ny)) {
-		return trueNode, nil
+		return returnResult(trueNode)
 	}
-	return falseNode, nil
+	return returnResult(falseNode)
 }
 
-func _bi_Lessp(frame Frame, parameters []Node) (Node, error) {
+func _bi_Lessp(frame Frame, parameters []Node) *CallResult {
 
 	nx, ex := evalToNumber(parameters[0])
 	ny, ey := evalToNumber(parameters[1])
@@ -264,12 +275,12 @@ func _bi_Lessp(frame Frame, parameters []Node) (Node, error) {
 	infix := frame.caller().isInfix
 
 	if ex == nil && ey == nil && ((infix && nx > ny) || (!infix && nx < ny)) {
-		return trueNode, nil
+		return returnResult(trueNode)
 	}
-	return falseNode, nil
+	return returnResult(falseNode)
 }
 
-func _bi_GreaterEqualp(frame Frame, parameters []Node) (Node, error) {
+func _bi_GreaterEqualp(frame Frame, parameters []Node) *CallResult {
 
 	nx, ex := evalToNumber(parameters[0])
 	ny, ey := evalToNumber(parameters[1])
@@ -277,12 +288,12 @@ func _bi_GreaterEqualp(frame Frame, parameters []Node) (Node, error) {
 	infix := frame.caller().isInfix
 
 	if ex == nil && ey == nil && ((infix && nx <= ny) || (!infix && nx >= ny)) {
-		return trueNode, nil
+		return returnResult(trueNode)
 	}
-	return falseNode, nil
+	return returnResult(falseNode)
 }
 
-func _bi_LessEqualp(frame Frame, parameters []Node) (Node, error) {
+func _bi_LessEqualp(frame Frame, parameters []Node) *CallResult {
 
 	nx, ex := evalToNumber(parameters[0])
 	ny, ey := evalToNumber(parameters[1])
@@ -290,110 +301,110 @@ func _bi_LessEqualp(frame Frame, parameters []Node) (Node, error) {
 	infix := frame.caller().isInfix
 
 	if ex == nil && ey == nil && ((infix && nx >= ny) || (!infix && nx <= ny)) {
-		return trueNode, nil
+		return returnResult(trueNode)
 	}
-	return falseNode, nil
+	return returnResult(falseNode)
 }
 
-func _bi_Numberp(frame Frame, parameters []Node) (Node, error) {
+func _bi_Numberp(frame Frame, parameters []Node) *CallResult {
 
 	_, err := evalToNumber(parameters[0])
 	if err != nil {
-		return falseNode, nil
+		return returnResult(falseNode)
 	}
-	return trueNode, nil
+	return returnResult(trueNode)
 }
 
-func _bi_Zerop(frame Frame, parameters []Node) (Node, error) {
+func _bi_Zerop(frame Frame, parameters []Node) *CallResult {
 
 	n, err := evalToNumber(parameters[0])
 	if err != nil || n != 0.0 {
-		return falseNode, nil
+		return returnResult(falseNode)
 	}
-	return trueNode, nil
+	return returnResult(trueNode)
 }
 
-func _bi_Rnd(frame Frame, parameters []Node) (Node, error) {
+func _bi_Rnd(frame Frame, parameters []Node) *CallResult {
 
 	n, err := evalToNumber(parameters[0])
 	if err != nil {
-		return nil, err
+		return errorResult(err)
 	}
 	nn := int64(n)
 	if nn < 1 {
-		return nil, errorPositiveIntegerExpected(parameters[0])
+		return errorResult(errorPositiveIntegerExpected(parameters[0]))
 	}
 
-	return createNumericNode(float64(rand.Int63n(nn))), nil
+	return returnResult(createNumericNode(float64(rand.Int63n(nn))))
 }
 
-func _bi_Random(frame Frame, parameters []Node) (Node, error) {
+func _bi_Random(frame Frame, parameters []Node) *CallResult {
 
 	return _bi_Rnd(frame, []Node{randomMax})
 }
 
-func _bi_Sqrt(frame Frame, parameters []Node) (Node, error) {
+func _bi_Sqrt(frame Frame, parameters []Node) *CallResult {
 
 	n, err := evalToNumber(parameters[0])
 	if err != nil {
-		return nil, err
+		return errorResult(err)
 	}
 
 	if n <= 0 {
-		return nil, errorPositiveNumberExpected(parameters[0])
+		return errorResult(errorPositiveNumberExpected(parameters[0]))
 	}
 
-	return createNumericNode(math.Sqrt(n)), nil
+	return returnResult(createNumericNode(math.Sqrt(n)))
 }
 
-func _bi_Pow(frame Frame, parameters []Node) (Node, error) {
+func _bi_Pow(frame Frame, parameters []Node) *CallResult {
 	nx, err := evalToNumber(parameters[0])
 	if err != nil {
-		return nil, err
+		return errorResult(err)
 	}
 	ny, err := evalToNumber(parameters[1])
 	if err != nil {
-		return nil, err
+		return errorResult(err)
 	}
 
-	return createNumericNode(math.Pow(nx, ny)), nil
+	return returnResult(createNumericNode(math.Pow(nx, ny)))
 }
 
-func _bi_Sin(frame Frame, parameters []Node) (Node, error) {
+func _bi_Sin(frame Frame, parameters []Node) *CallResult {
 
 	a, err := evalToNumber(parameters[0])
 	if err != nil {
-		return nil, err
+		return errorResult(err)
 	}
 
-	return createNumericNode(math.Sin(a * (180.0 / math.Pi))), nil
+	return returnResult(createNumericNode(math.Sin(a * (180.0 / math.Pi))))
 }
 
-func _bi_Cos(frame Frame, parameters []Node) (Node, error) {
+func _bi_Cos(frame Frame, parameters []Node) *CallResult {
 
 	a, err := evalToNumber(parameters[0])
 	if err != nil {
-		return nil, err
+		return errorResult(err)
 	}
 
-	return createNumericNode(math.Cos(a * (180.0 / math.Pi))), nil
+	return returnResult(createNumericNode(math.Cos(a * (180.0 / math.Pi))))
 }
 
-func _bi_Arctan(frame Frame, parameters []Node) (Node, error) {
+func _bi_Arctan(frame Frame, parameters []Node) *CallResult {
 
 	a, err := evalToNumber(parameters[0])
 	if err != nil {
-		return nil, err
+		return errorResult(err)
 	}
 
-	return createNumericNode(math.Atan(a * (180.0 / math.Pi))), nil
+	return returnResult(createNumericNode(math.Atan(a * (180.0 / math.Pi))))
 }
 
-func _bi_Test(frame Frame, parameters []Node) (Node, error) {
+func _bi_Test(frame Frame, parameters []Node) *CallResult {
 
 	b, err := evalToBoolean(parameters[0])
 	if err != nil {
-		return nil, err
+		return errorResult(err)
 	}
 
 	if b {
@@ -402,88 +413,88 @@ func _bi_Test(frame Frame, parameters []Node) (Node, error) {
 		frame.parentFrame().setTestValue(falseNode)
 	}
 
-	return nil, nil
+	return nil
 }
 
-func _bi_IfTrue(frame Frame, parameters []Node) (Node, error) {
+func _bi_IfTrue(frame Frame, parameters []Node) *CallResult {
 
 	n := frame.parentFrame().getTestValue()
 	if n == nil {
-		return nil, errorNoCurrentTestValue(parameters[0])
+		return errorResult(errorNoCurrentTestValue(parameters[0]))
 	}
 
 	if nodesEqual(n, trueNode, false) {
 		return evalInstructionList(frame, parameters[0], true)
 	}
-	return nil, nil
+	return nil
 }
 
-func _bi_IfFalse(frame Frame, parameters []Node) (Node, error) {
+func _bi_IfFalse(frame Frame, parameters []Node) *CallResult {
 
 	n := frame.parentFrame().getTestValue()
 	if n == nil {
-		return nil, errorNoCurrentTestValue(parameters[0])
+		return errorResult(errorNoCurrentTestValue(parameters[0]))
 	}
 
 	if nodesEqual(n, falseNode, false) {
 		return evalInstructionList(frame, parameters[0], true)
 	}
-	return nil, nil
+	return nil
 }
 
-func _bi_Make(frame Frame, parameters []Node) (Node, error) {
+func _bi_Make(frame Frame, parameters []Node) *CallResult {
 
 	name, err := evalToWord(parameters[0])
 	if err != nil {
-		return nil, err
+		return errorResult(err)
 	}
 
 	frame.parentFrame().setVariable(name, parameters[1])
-	return nil, nil
+	return nil
 }
 
-func _bi_Thing(frame Frame, parameters []Node) (Node, error) {
+func _bi_Thing(frame Frame, parameters []Node) *CallResult {
 
 	name, err := evalToWord(parameters[0])
 	if err != nil {
-		return nil, err
+		return errorResult(err)
 	}
 
 	val := frame.parentFrame().getVariable(name)
 	if val == nil {
-		return nil, errorVariableNotFound(parameters[0], name)
+		return errorResult(errorVariableNotFound(parameters[0], name))
 	}
 
-	return val, nil
+	return returnResult(val)
 }
 
-func _bi_Local(frame Frame, parameters []Node) (Node, error) {
+func _bi_Local(frame Frame, parameters []Node) *CallResult {
 
 	name, err := evalToWord(parameters[0])
 	if err != nil {
-		return nil, err
+		return errorResult(err)
 	}
 
 	frame.parentFrame().createLocal(name)
-	return nil, nil
+	return nil
 }
 
-func _bi_Word(frame Frame, parameters []Node) (Node, error) {
+func _bi_Word(frame Frame, parameters []Node) *CallResult {
 
 	l, err := evalToWord(parameters[0])
 	if err != nil {
-		return nil, err
+		return errorResult(err)
 	}
 
 	r, err := evalToWord(parameters[1])
 	if err != nil {
-		return nil, err
+		return errorResult(err)
 	}
 
-	return newWordNode(-1, -1, l+r, true), nil
+	return returnResult(newWordNode(-1, -1, l+r, true))
 }
 
-func _bi_Sentence(frame Frame, parameters []Node) (Node, error) {
+func _bi_Sentence(frame Frame, parameters []Node) *CallResult {
 
 	var fn Node
 
@@ -495,29 +506,39 @@ func _bi_Sentence(frame Frame, parameters []Node) (Node, error) {
 	}
 
 	nn := fn
-	for nn.next() != nil {
-		nn = nn.next()
+	if nn == nil {
+		switch r := parameters[1].(type) {
+		case *WordNode:
+			fn = r.clone()
+		case *ListNode:
+			fn = (r.clone()).(*ListNode).firstChild
+		}
+
+	} else {
+		for nn.next() != nil {
+			nn = nn.next()
+		}
+
+		switch r := parameters[1].(type) {
+		case *WordNode:
+			nn.addNode(r.clone())
+		case *ListNode:
+			nn.addNode((r.clone()).(*ListNode).firstChild)
+		}
 	}
 
-	switch r := parameters[1].(type) {
-	case *WordNode:
-		nn.addNode(r.clone())
-	case *ListNode:
-		nn.addNode((r.clone()).(*ListNode).firstChild)
-	}
-
-	return newListNode(-1, -1, fn), nil
+	return returnResult(newListNode(-1, -1, fn))
 }
 
-func _bi_List(frame Frame, parameters []Node) (Node, error) {
+func _bi_List(frame Frame, parameters []Node) *CallResult {
 
 	l := parameters[0].clone()
 	l.addNode(parameters[1].clone())
 
-	return newListNode(-1, -1, l), nil
+	return returnResult(newListNode(-1, -1, l))
 }
 
-func _bi_FPut(frame Frame, parameters []Node) (Node, error) {
+func _bi_FPut(frame Frame, parameters []Node) *CallResult {
 
 	l := parameters[0].clone()
 
@@ -526,12 +547,12 @@ func _bi_FPut(frame Frame, parameters []Node) (Node, error) {
 		rc := r.clone().(*ListNode)
 		l.addNode(rc.firstChild)
 		rc.firstChild = l
-		return rc, nil
+		return returnResult(rc)
 	}
-	return nil, errorListExpected(parameters[1])
+	return errorResult(errorListExpected(parameters[1]))
 }
 
-func _bi_LPut(frame Frame, parameters []Node) (Node, error) {
+func _bi_LPut(frame Frame, parameters []Node) *CallResult {
 
 	l := parameters[0].clone()
 
@@ -547,83 +568,83 @@ func _bi_LPut(frame Frame, parameters []Node) (Node, error) {
 		} else {
 			n.addNode(l)
 		}
-		return rc, nil
+		return returnResult(rc)
 	}
-	return nil, errorListExpected(parameters[1])
+	return errorResult(errorListExpected(parameters[1]))
 }
 
-func _bi_First(frame Frame, parameters []Node) (Node, error) {
+func _bi_First(frame Frame, parameters []Node) *CallResult {
 
 	switch n := parameters[0].(type) {
 	case *WordNode:
 		if len(n.value) == 0 {
-			return nil, errorBadInput(n)
+			return errorResult(errorBadInput(n))
 		}
-		return newWordNode(-1, -1, string(n.value[0]), true), nil
+		return returnResult(newWordNode(-1, -1, string(n.value[0]), true))
 	case *ListNode:
 		if n.firstChild == nil {
-			return nil, errorBadInput(n)
+			return errorResult(errorBadInput(n))
 		}
-		return n.firstChild.clone(), nil
+		return returnResult(n.firstChild.clone())
 
 	}
 
-	return nil, nil
+	return nil
 }
 
-func _bi_Last(frame Frame, parameters []Node) (Node, error) {
+func _bi_Last(frame Frame, parameters []Node) *CallResult {
 
 	switch n := parameters[0].(type) {
 	case *WordNode:
 		if len(n.value) == 0 {
-			return nil, errorBadInput(n)
+			return errorResult(errorBadInput(n))
 		}
-		return newWordNode(-1, -1, string(n.value[len(n.value)-1]), true), nil
+		return returnResult(newWordNode(-1, -1, string(n.value[len(n.value)-1]), true))
 	case *ListNode:
 		if n.firstChild == nil {
-			return nil, errorBadInput(n)
+			return errorResult(errorBadInput(n))
 		}
 		nn := n.firstChild
 		for nn.next() != nil {
 			nn = nn.next()
 		}
-		return nn.clone(), nil
+		return returnResult(nn.clone())
 	}
 
-	return nil, nil
+	return nil
 }
 
-func _bi_ButFirst(frame Frame, parameters []Node) (Node, error) {
+func _bi_ButFirst(frame Frame, parameters []Node) *CallResult {
 
 	switch n := parameters[0].(type) {
 	case *WordNode:
 		if len(n.value) == 0 {
-			return nil, errorBadInput(n)
+			return errorResult(errorBadInput(n))
 		}
-		return newWordNode(-1, -1, string(n.value[1:]), true), nil
+		return returnResult(newWordNode(-1, -1, string(n.value[1:]), true))
 	case *ListNode:
 		if n.firstChild == nil {
-			return nil, errorBadInput(n)
+			return errorResult(errorBadInput(n))
 		}
 		nn := n.clone().(*ListNode)
 		nn.firstChild = nn.firstChild.next()
-		return nn, nil
+		return returnResult(nn)
 	}
 
-	return nil, nil
+	return nil
 }
 
-func _bi_ButLast(frame Frame, parameters []Node) (Node, error) {
+func _bi_ButLast(frame Frame, parameters []Node) *CallResult {
 
 	switch n := parameters[0].(type) {
 	case *WordNode:
 		if len(n.value) == 0 {
-			return nil, errorBadInput(n)
+			return errorResult(errorBadInput(n))
 		}
-		return newWordNode(-1, -1, string(n.value[0:len(n.value)-1]), true), nil
+		return returnResult(newWordNode(-1, -1, string(n.value[0:len(n.value)-1]), true))
 	case *ListNode:
 		if n.firstChild == nil {
-			return nil, errorBadInput(n)
+			return errorResult(errorBadInput(n))
 		}
 		nn := n.clone().(*ListNode)
 		var pn Node = nil
@@ -633,25 +654,25 @@ func _bi_ButLast(frame Frame, parameters []Node) (Node, error) {
 		if pn != nil {
 			pn.addNode(nil)
 		}
-		return nn, nil
+		return returnResult(nn)
 	}
 
-	return nil, nil
+	return nil
 }
 
-func _bi_Count(frame Frame, parameters []Node) (Node, error) {
+func _bi_Count(frame Frame, parameters []Node) *CallResult {
 
 	switch n := parameters[0].(type) {
 	case *WordNode:
-		return createNumericNode(float64(len(n.value))), nil
+		return returnResult(createNumericNode(float64(len(n.value))))
 	case *ListNode:
-		return createNumericNode(float64(n.length())), nil
+		return returnResult(createNumericNode(float64(n.length())))
 	}
 
-	return nil, nil
+	return nil
 }
 
-func _bi_Emptyp(frame Frame, parameters []Node) (Node, error) {
+func _bi_Emptyp(frame Frame, parameters []Node) *CallResult {
 	var length int = 0
 
 	switch n := parameters[0].(type) {
@@ -662,85 +683,85 @@ func _bi_Emptyp(frame Frame, parameters []Node) (Node, error) {
 	}
 
 	if length == 0 {
-		return trueNode, nil
+		return returnResult(trueNode)
 	}
-	return falseNode, nil
+	return returnResult(falseNode)
 }
 
-func _bi_Wordp(frame Frame, parameters []Node) (Node, error) {
+func _bi_Wordp(frame Frame, parameters []Node) *CallResult {
 
 	switch parameters[0].(type) {
 	case *WordNode:
-		return trueNode, nil
+		return returnResult(trueNode)
 	}
-	return falseNode, nil
+	return returnResult(falseNode)
 }
 
-func _bi_Sentencep(frame Frame, parameters []Node) (Node, error) {
+func _bi_Sentencep(frame Frame, parameters []Node) *CallResult {
 
 	switch n := parameters[0].(type) {
 	case *ListNode:
 		for nn := n.firstChild; nn != nil; nn = nn.next() {
 			if nn.nodeType() != Word {
-				return falseNode, nil
+				return returnResult(falseNode)
 			}
 		}
-		return trueNode, nil
+		return returnResult(trueNode)
 	}
-	return falseNode, nil
+	return returnResult(falseNode)
 }
 
-func _bi_Memberp(frame Frame, parameters []Node) (Node, error) {
+func _bi_Memberp(frame Frame, parameters []Node) *CallResult {
 
 	switch y := parameters[1].(type) {
 	case *WordNode:
 		if parameters[0].nodeType() != Word {
-			return nil, errorBadInput(parameters[0])
+			return errorResult(errorBadInput(parameters[0]))
 		}
 		x := parameters[0].(*WordNode)
 		if len(x.value) != 1 {
-			return nil, errorBadInput(x)
+			return errorResult(errorBadInput(x))
 		}
 
 		if strings.Index(strings.ToUpper(y.value), strings.ToUpper(x.value)) >= 0 {
-			return trueNode, nil
+			return returnResult(trueNode)
 		}
 	case *ListNode:
 		for c := y.firstChild; c != nil; c = c.next() {
 			if nodesEqual(c, parameters[0], false) {
-				return trueNode, nil
+				return returnResult(trueNode)
 			}
 		}
 	}
 
-	return falseNode, nil
+	return returnResult(falseNode)
 }
 
-func _bi_Item(frame Frame, parameters []Node) (Node, error) {
+func _bi_Item(frame Frame, parameters []Node) *CallResult {
 
 	ix := int64(0)
 	switch n := parameters[0].(type) {
 	case *WordNode:
 		fix, err := evalToNumber(n)
 		if err != nil {
-			return nil, err
+			return errorResult(err)
 		}
 		ix = int64(fix)
 
 	case *ListNode:
-		return nil, errorBadInput(n)
+		return errorResult(errorBadInput(n))
 	}
 
 	if ix <= 0 {
-		return nil, errorBadInput(parameters[0])
+		return errorResult(errorBadInput(parameters[0]))
 	}
 
 	switch v := parameters[1].(type) {
 	case *WordNode:
 		if ix > int64(len(v.value)) {
-			return nil, errorBadInput(parameters[0])
+			return errorResult(errorBadInput(parameters[0]))
 		}
-		return newWordNode(-1, -1, string(v.value[ix-1]), true), nil
+		return returnResult(newWordNode(-1, -1, string(v.value[ix-1]), true))
 
 	case *ListNode:
 		cn := v.firstChild
@@ -748,120 +769,120 @@ func _bi_Item(frame Frame, parameters []Node) (Node, error) {
 			cn = cn.next()
 		}
 		if cn == nil {
-			return nil, errorBadInput(parameters[0])
+			return errorResult(errorBadInput(parameters[0]))
 		}
-		return cn.clone(), nil
+		return returnResult(cn.clone())
 	}
 
-	return nil, nil
+	return nil
 }
 
-func _bi_Goodbye(frame Frame, parameters []Node) (Node, error) {
+func _bi_Goodbye(frame Frame, parameters []Node) *CallResult {
 
 	frame.workspace().print("Seeya!\n\n")
 
 	frame.workspace().broker.PublishId(MT_Quit)
 
-	return nil, nil
+	return nil
 }
 
-func _bi_Both(frame Frame, parameters []Node) (Node, error) {
+func _bi_Both(frame Frame, parameters []Node) *CallResult {
 
 	x, err := evalToBoolean(parameters[0])
 	if err != nil {
-		return nil, err
+		return errorResult(err)
 	}
 	if !x {
-		return falseNode, nil
+		return returnResult(falseNode)
 	}
 
 	y, err := evalToBoolean(parameters[1])
 	if err != nil {
-		return nil, err
+		return errorResult(err)
 	}
 
 	if !y {
-		return falseNode, nil
+		return returnResult(falseNode)
 	}
 
-	return trueNode, nil
+	return returnResult(trueNode)
 }
 
-func _bi_Either(frame Frame, parameters []Node) (Node, error) {
+func _bi_Either(frame Frame, parameters []Node) *CallResult {
 
 	x, err := evalToBoolean(parameters[0])
 	if err != nil {
-		return nil, err
+		return errorResult(err)
 	}
 	if x {
-		return trueNode, nil
+		return returnResult(trueNode)
 	}
 
 	y, err := evalToBoolean(parameters[1])
 	if err != nil {
-		return nil, err
+		return errorResult(err)
 	}
 
 	if y {
-		return trueNode, nil
+		return returnResult(trueNode)
 	}
 
-	return falseNode, nil
+	return returnResult(falseNode)
 }
 
-func _bi_Not(frame Frame, parameters []Node) (Node, error) {
+func _bi_Not(frame Frame, parameters []Node) *CallResult {
 
 	x, err := evalToBoolean(parameters[0])
 	if err != nil {
-		return nil, err
+		return errorResult(err)
 	}
 	if x {
-		return falseNode, nil
+		return returnResult(falseNode)
 	}
-	return trueNode, nil
+	return returnResult(trueNode)
 }
 
-func _bi_Trace(frame Frame, parameters []Node) (Node, error) {
+func _bi_Trace(frame Frame, parameters []Node) *CallResult {
 
 	frame.workspace().setTrace(true)
 
-	return nil, nil
+	return nil
 }
 
-func _bi_Untrace(frame Frame, parameters []Node) (Node, error) {
+func _bi_Untrace(frame Frame, parameters []Node) *CallResult {
 
 	frame.workspace().setTrace(false)
 
-	return nil, nil
+	return nil
 }
 
-func _bi_Wait(frame Frame, parameters []Node) (Node, error) {
+func _bi_Wait(frame Frame, parameters []Node) *CallResult {
 
 	fs, err := evalToNumber(parameters[0])
 	if err != nil {
-		return nil, err
+		return errorResult(err)
 	}
 
 	s := time.Duration(fs)
 	if s < 1 {
-		return nil, errorBadInput(parameters[0])
+		return errorResult(errorBadInput(parameters[0]))
 	}
 
 	time.Sleep(s * time.Second)
 
-	return nil, nil
+	return nil
 }
 
-func _bi_Run(frame Frame, parameters []Node) (Node, error) {
+func _bi_Run(frame Frame, parameters []Node) *CallResult {
 
 	return evalInstructionList(frame, parameters[0], false)
 }
 
-func _bi_Po(frame Frame, parameters []Node) (Node, error) {
+func _bi_Po(frame Frame, parameters []Node) *CallResult {
 
 	names, err := toWordList(parameters[0])
 	if err != nil {
-		return nil, err
+		return errorResult(err)
 	}
 	ws := frame.workspace()
 	for _, n := range names {
@@ -878,10 +899,10 @@ func _bi_Po(frame Frame, parameters []Node) (Node, error) {
 		}
 	}
 
-	return nil, nil
+	return nil
 }
 
-func _bi_PoAll(frame Frame, parameters []Node) (Node, error) {
+func _bi_PoAll(frame Frame, parameters []Node) *CallResult {
 
 	ws := frame.workspace()
 
@@ -892,7 +913,7 @@ func _bi_PoAll(frame Frame, parameters []Node) (Node, error) {
 
 		_bi_Pons(frame, parameters)
 	}
-	return nil, nil
+	return nil
 }
 
 func printVariable(ws *Workspace, n string, v Node) {
@@ -935,11 +956,11 @@ func toWordList(node Node) ([]*WordNode, error) {
 	return names, nil
 }
 
-func _bi_Pon(frame Frame, parameters []Node) (Node, error) {
+func _bi_Pon(frame Frame, parameters []Node) *CallResult {
 
 	names, err := toWordList(parameters[0])
 	if err != nil {
-		return nil, err
+		return errorResult(err)
 	}
 
 	ws := frame.workspace()
@@ -951,10 +972,10 @@ func _bi_Pon(frame Frame, parameters []Node) (Node, error) {
 		}
 	}
 
-	return nil, nil
+	return nil
 }
 
-func _bi_Pons(frame Frame, parameters []Node) (Node, error) {
+func _bi_Pons(frame Frame, parameters []Node) *CallResult {
 
 	ws := frame.workspace()
 
@@ -964,10 +985,10 @@ func _bi_Pons(frame Frame, parameters []Node) (Node, error) {
 		}
 	}
 
-	return nil, nil
+	return nil
 }
 
-func _bi_Pops(frame Frame, parameters []Node) (Node, error) {
+func _bi_Pops(frame Frame, parameters []Node) *CallResult {
 	ws := frame.workspace()
 
 	for _, p := range ws.procedures {
@@ -980,10 +1001,10 @@ func _bi_Pops(frame Frame, parameters []Node) (Node, error) {
 		}
 	}
 
-	return nil, nil
+	return nil
 }
 
-func _bi_Pots(frame Frame, parameters []Node) (Node, error) {
+func _bi_Pots(frame Frame, parameters []Node) *CallResult {
 	ws := frame.workspace()
 
 	for _, p := range ws.procedures {
@@ -995,14 +1016,14 @@ func _bi_Pots(frame Frame, parameters []Node) (Node, error) {
 		}
 	}
 
-	return nil, nil
+	return nil
 }
 
-func _bi_Pot(frame Frame, parameters []Node) (Node, error) {
+func _bi_Pot(frame Frame, parameters []Node) *CallResult {
 
 	names, err := toWordList(parameters[0])
 	if err != nil {
-		return nil, err
+		return errorResult(err)
 	}
 
 	ws := frame.workspace()
@@ -1019,23 +1040,23 @@ func _bi_Pot(frame Frame, parameters []Node) (Node, error) {
 		}
 	}
 
-	return nil, nil
+	return nil
 }
 
-func _bi_ErAll(frame Frame, parameters []Node) (Node, error) {
+func _bi_ErAll(frame Frame, parameters []Node) *CallResult {
 
 	_bi_Erps(frame, parameters)
 
 	_bi_Erns(frame, parameters)
 
-	return nil, nil
+	return nil
 }
 
-func _bi_Erase(frame Frame, parameters []Node) (Node, error) {
+func _bi_Erase(frame Frame, parameters []Node) *CallResult {
 
 	names, err := toWordList(parameters[0])
 	if err != nil {
-		return nil, err
+		return errorResult(err)
 	}
 
 	ws := frame.workspace()
@@ -1053,14 +1074,14 @@ func _bi_Erase(frame Frame, parameters []Node) (Node, error) {
 		}
 	}
 
-	return nil, nil
+	return nil
 }
 
-func _bi_Ern(frame Frame, parameters []Node) (Node, error) {
+func _bi_Ern(frame Frame, parameters []Node) *CallResult {
 
 	names, err := toWordList(parameters[0])
 	if err != nil {
-		return nil, err
+		return errorResult(err)
 	}
 
 	ws := frame.workspace()
@@ -1072,10 +1093,10 @@ func _bi_Ern(frame Frame, parameters []Node) (Node, error) {
 		}
 	}
 
-	return nil, nil
+	return nil
 }
 
-func _bi_Erns(frame Frame, parameters []Node) (Node, error) {
+func _bi_Erns(frame Frame, parameters []Node) *CallResult {
 
 	ws := frame.workspace()
 
@@ -1084,10 +1105,10 @@ func _bi_Erns(frame Frame, parameters []Node) (Node, error) {
 			delete(ws.rootFrame.vars, n)
 		}
 	}
-	return nil, nil
+	return nil
 }
 
-func _bi_Erps(frame Frame, parameters []Node) (Node, error) {
+func _bi_Erps(frame Frame, parameters []Node) *CallResult {
 
 	ws := frame.workspace()
 
@@ -1100,13 +1121,13 @@ func _bi_Erps(frame Frame, parameters []Node) (Node, error) {
 		}
 	}
 
-	return nil, nil
+	return nil
 }
 
-func _bi_Bury(frame Frame, parameters []Node) (Node, error) {
+func _bi_Bury(frame Frame, parameters []Node) *CallResult {
 	names, err := toWordList(parameters[0])
 	if err != nil {
-		return nil, err
+		return errorResult(err)
 	}
 
 	ws := frame.workspace()
@@ -1122,10 +1143,10 @@ func _bi_Bury(frame Frame, parameters []Node) (Node, error) {
 		}
 	}
 
-	return nil, nil
+	return nil
 }
 
-func _bi_BuryAll(frame Frame, parameters []Node) (Node, error) {
+func _bi_BuryAll(frame Frame, parameters []Node) *CallResult {
 
 	ws := frame.workspace()
 
@@ -1139,14 +1160,14 @@ func _bi_BuryAll(frame Frame, parameters []Node) (Node, error) {
 	for _, v := range ws.rootFrame.vars {
 		v.buried = true
 	}
-	return nil, nil
+	return nil
 }
 
-func _bi_BuryName(frame Frame, parameters []Node) (Node, error) {
+func _bi_BuryName(frame Frame, parameters []Node) *CallResult {
 
 	names, err := toWordList(parameters[0])
 	if err != nil {
-		return nil, err
+		return errorResult(err)
 	}
 
 	ws := frame.workspace()
@@ -1158,13 +1179,13 @@ func _bi_BuryName(frame Frame, parameters []Node) (Node, error) {
 		}
 	}
 
-	return nil, nil
+	return nil
 }
 
-func _bi_Unbury(frame Frame, parameters []Node) (Node, error) {
+func _bi_Unbury(frame Frame, parameters []Node) *CallResult {
 	names, err := toWordList(parameters[0])
 	if err != nil {
-		return nil, err
+		return errorResult(err)
 	}
 
 	ws := frame.workspace()
@@ -1180,10 +1201,10 @@ func _bi_Unbury(frame Frame, parameters []Node) (Node, error) {
 		}
 	}
 
-	return nil, nil
+	return nil
 }
 
-func _bi_UnburyAll(frame Frame, parameters []Node) (Node, error) {
+func _bi_UnburyAll(frame Frame, parameters []Node) *CallResult {
 	ws := frame.workspace()
 
 	for _, p := range ws.procedures {
@@ -1196,13 +1217,13 @@ func _bi_UnburyAll(frame Frame, parameters []Node) (Node, error) {
 	for _, v := range ws.rootFrame.vars {
 		v.buried = false
 	}
-	return nil, nil
+	return nil
 }
 
-func _bi_UnburyName(frame Frame, parameters []Node) (Node, error) {
+func _bi_UnburyName(frame Frame, parameters []Node) *CallResult {
 	names, err := toWordList(parameters[0])
 	if err != nil {
-		return nil, err
+		return errorResult(err)
 	}
 
 	ws := frame.workspace()
@@ -1214,79 +1235,79 @@ func _bi_UnburyName(frame Frame, parameters []Node) (Node, error) {
 		}
 	}
 
-	return nil, nil
+	return nil
 }
 
-func _bi_Load(frame Frame, parameters []Node) (Node, error) {
+func _bi_Load(frame Frame, parameters []Node) *CallResult {
 
 	name, err := evalToWord(parameters[0])
 	if err != nil {
-		return nil, err
+		return errorResult(err)
 	}
 
 	ws := frame.workspace()
 	err = ws.files.OpenFile(name)
 	if err != nil {
-		return nil, err
+		return errorResult(err)
 	}
 
 	err = ws.files.SetReader(name)
 	if err != nil {
-		return nil, err
+		return errorResult(err)
 	}
 	defer ws.files.CloseFile(name)
 
 	err = ws.readFile()
 	if err != nil && err != io.EOF {
-		return nil, err
+		return errorResult(err)
 	}
 
-	return nil, nil
+	return nil
 }
 
-func _bi_Save(frame Frame, parameters []Node) (Node, error) {
+func _bi_Save(frame Frame, parameters []Node) *CallResult {
 
 	name, err := evalToWord(parameters[0])
 	if err != nil {
-		return nil, err
+		return errorResult(err)
 	}
 
 	ws := frame.workspace()
 	err = ws.files.OpenFile(name)
 	if err != nil {
-		return nil, err
+		return errorResult(err)
 	}
 
 	err = ws.files.SetWriter(name)
 	if err != nil {
-		return nil, err
+		return errorResult(err)
 	}
 	defer ws.files.CloseFile(name)
 
 	return _bi_PoAll(frame, parameters)
 }
 
-func _bi_Savel(frame Frame, parameters []Node) (Node, error) {
+func _bi_Savel(frame Frame, parameters []Node) *CallResult {
 
 	names, err := toWordList(parameters[0])
 	if err != nil {
-		return nil, err
+		return errorResult(err)
 	}
 
 	name, err := evalToWord(parameters[1])
 	if err != nil {
-		return nil, err
+		return errorResult(err)
 	}
 
 	ws := frame.workspace()
 	err = ws.files.OpenFile(name)
 	if err != nil {
-		return nil, err
+		return errorResult(err)
 	}
 
 	err = ws.files.SetWriter(name)
 	if err != nil {
-		return nil, err
+		return errorResult(err)
 	}
 	defer ws.files.CloseFile(name)
 
@@ -1307,87 +1328,103 @@ func _bi_Savel(frame Frame, parameters []Node) (Node, error) {
 	return _bi_Pons(frame, parameters)
 }
 
-func _bi_Catalog(frame Frame, parameters []Node) (Node, error) {
+func _bi_Catalog(frame Frame, parameters []Node) *CallResult {
 
 	frame.workspace().files.Catalog()
-	return nil, nil
+	return nil
 }
 
-func _bi_Prefix(frame Frame, parameters []Node) (Node, error) {
+func _bi_Prefix(frame Frame, parameters []Node) *CallResult {
 
-	return newWordNode(-1, -1, frame.workspace().files.rootPath, true), nil
+	return returnResult(newWordNode(-1, -1, frame.workspace().files.rootPath, true))
 }
 
-func _bi_SetPrefix(frame Frame, parameters []Node) (Node, error) {
+func _bi_SetPrefix(frame Frame, parameters []Node) *CallResult {
 
 	p, err := evalToWord(parameters[0])
 	if err != nil {
-		return nil, err
+		return errorResult(err)
 	}
-	return nil, frame.workspace().files.SetPrefix(p)
-}
-
-func _bi_CreateDir(frame Frame, parameters []Node) (Node, error) {
-
-	p, err := evalToWord(parameters[0])
+	err = frame.workspace().files.SetPrefix(p)
 	if err != nil {
-		return nil, err
+		return errorResult(err)
 	}
-	return nil, frame.workspace().files.CreateDir(p)
+	return nil
 }
 
-func _bi_EraseFile(frame Frame, parameters []Node) (Node, error) {
+func _bi_CreateDir(frame Frame, parameters []Node) *CallResult {
 
 	p, err := evalToWord(parameters[0])
 	if err != nil {
-		return nil, err
+		return errorResult(err)
 	}
-	return nil, frame.workspace().files.EraseFile(p)
+	err = frame.workspace().files.CreateDir(p)
+	if err != nil {
+		return errorResult(err)
+	}
+	return nil
 }
 
-func _bi_Filep(frame Frame, parameters []Node) (Node, error) {
+func _bi_EraseFile(frame Frame, parameters []Node) *CallResult {
 
 	p, err := evalToWord(parameters[0])
 	if err != nil {
-		return nil, err
+		return errorResult(err)
+	}
+	err = frame.workspace().files.EraseFile(p)
+	if err != nil {
+		return errorResult(err)
+	}
+	return nil
+}
+
+func _bi_Filep(frame Frame, parameters []Node) *CallResult {
+
+	p, err := evalToWord(parameters[0])
+	if err != nil {
+		return errorResult(err)
 	}
 	if frame.workspace().files.IsFile(p) {
-		return trueNode, nil
+		return returnResult(trueNode)
 	}
-	return falseNode, nil
+	return returnResult(falseNode)
 }
 
-func _bi_Rename(frame Frame, parameters []Node) (Node, error) {
+func _bi_Rename(frame Frame, parameters []Node) *CallResult {
 
 	from, err := evalToWord(parameters[0])
 	if err != nil {
-		return nil, err
+		return errorResult(err)
 	}
 	to, err := evalToWord(parameters[1])
 	if err != nil {
-		return nil, err
+		return errorResult(err)
 	}
-	return nil, frame.workspace().files.Rename(from, to)
+	err = frame.workspace().files.Rename(from, to)
+	if err != nil {
+		return errorResult(err)
+	}
+	return nil
 }
 
-func _bi_Pofile(frame Frame, parameters []Node) (Node, error) {
+func _bi_Pofile(frame Frame, parameters []Node) *CallResult {
 
 	p, err := evalToWord(parameters[0])
 	if err != nil {
-		return nil, err
+		return errorResult(err)
 	}
 
 	fs := frame.workspace().files
 
 	err = fs.OpenFile(p)
 	if err != nil {
-		return nil, err
+		return errorResult(err)
 	}
 	defer fs.CloseFile(p)
 
 	err = fs.SetReader(p)
 	if err != nil {
-		return nil, err
+		return errorResult(err)
 	}
 
 	for {
@@ -1397,14 +1434,14 @@ func _bi_Pofile(frame Frame, parameters []Node) (Node, error) {
 			if err == io.EOF {
 				break
 			}
-			return nil, err
+			return errorResult(err)
 		}
 
 		fs.writer.Write(l)
 		fs.writer.Write("\n")
 	}
 
-	return nil, nil
+	return nil
 }
 
 func registerBuiltInProcedures(workspace *Workspace) {
@@ -1519,5 +1556,4 @@ func registerBuiltInProcedures(workspace *Workspace) {
 	workspace.registerBuiltIn("FILEP", "", 1, _bi_Filep)
 	workspace.registerBuiltIn("RENAME", "", 2, _bi_Rename)
 	workspace.registerBuiltIn("POFILE", "", 1, _bi_Pofile)
-
 }

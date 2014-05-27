@@ -425,11 +425,11 @@ func (this *Editor) RunEditor() {
 	}
 }
 
-func _ed_Edit(frame Frame, parameters []Node) (Node, error) {
+func _ed_Edit(frame Frame, parameters []Node) *CallResult {
 
 	names, err := toWordList(parameters[0])
 	if err != nil {
-		return nil, err
+		return errorResult(err)
 	}
 	ws := frame.workspace()
 	var b bytes.Buffer
@@ -448,5 +448,9 @@ func _ed_Edit(frame Frame, parameters []Node) (Node, error) {
 
 	editedContent := ws.editor.StartEditor(b.String())
 
-	return nil, frame.workspace().readString(editedContent)
+	err = frame.workspace().readString(editedContent)
+	if err != nil {
+		return errorResult(err)
+	}
+	return nil
 }

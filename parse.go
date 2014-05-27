@@ -32,7 +32,7 @@ func Parse(r io.Reader) (n Node, err error) {
 	var pn Node = nil
 	var nn Node = nil
 	for err == nil {
-		nn, err = parse(rr, &l, &c)
+		nn, err = parse(rr, &l, &c, false)
 
 		if nn != nil {
 			if pn != nil {
@@ -55,7 +55,7 @@ func Parse(r io.Reader) (n Node, err error) {
 
 }
 
-func parse(r *bufio.Reader, line, col *int) (n Node, err error) {
+func parse(r *bufio.Reader, line, col *int, inList bool) (n Node, err error) {
 
 	err = readSeparator(r, List, line, col)
 	if err != nil {
@@ -147,7 +147,7 @@ func readList(r *bufio.Reader, line, col *int) (n Node, err error) {
 	var nn Node = nil
 	var closed bool = false
 	for {
-		nn, err = parse(r, line, col)
+		nn, err = parse(r, line, col, true)
 		if err != nil {
 			break
 		}
@@ -205,7 +205,7 @@ func isNegativeNumber(pc, c rune, r *bufio.Reader) bool {
 	return unicode.IsDigit(nc)
 }
 
-func readWord(r *bufio.Reader, line, col *int) (n Node, err error) {
+func readWord(r *bufio.Reader, line, col *int) (*WordNode, error) {
 
 	r.UnreadRune()
 
@@ -213,7 +213,7 @@ func readWord(r *bufio.Reader, line, col *int) (n Node, err error) {
 	escaped := false
 	isLiteral := false
 	var pc rune
-
+	var err error
 	for {
 		c, _, err := r.ReadRune()
 		if err != nil {

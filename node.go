@@ -21,6 +21,7 @@ type Node interface {
 	position() (int, int)
 	String() string
 	clone() Node
+	setLiteral()
 }
 
 type BaseNode struct {
@@ -36,7 +37,7 @@ type WordNode struct {
 	isInfix   bool
 }
 
-func newWordNode(line, col int, value string, isLiteral bool) Node {
+func newWordNode(line, col int, value string, isLiteral bool) *WordNode {
 	n := &WordNode{}
 	n.BaseNode.line = line
 	n.BaseNode.col = col
@@ -61,17 +62,19 @@ func (this *WordNode) String() string {
 }
 
 func (this *WordNode) clone() Node {
-	n := newWordNode(this.line, this.col, this.value, this.isLiteral).(*WordNode)
+	n := newWordNode(this.line, this.col, this.value, this.isLiteral)
 	n.isInfix = this.isInfix
 	return n
 }
+
+func (this *WordNode) setLiteral() { this.isLiteral = true }
 
 type ListNode struct {
 	BaseNode
 	firstChild Node
 }
 
-func newListNode(line, col int, firstChild Node) Node {
+func newListNode(line, col int, firstChild Node) *ListNode {
 	n := &ListNode{}
 	n.BaseNode.line = line
 	n.BaseNode.col = col
@@ -111,14 +114,24 @@ func (this *ListNode) length() int {
 }
 
 func (this *ListNode) clone() Node {
-	fn := this.firstChild.clone()
-	var nn = fn
-	for on := this.firstChild.next(); on != nil; on = on.next() {
-		nn.addNode(on.clone())
-		nn = nn.next()
+	var fn Node
+	if this.firstChild != nil {
+		fn = this.firstChild.clone()
+		var nn = fn
+		for on := this.firstChild.next(); on != nil; on = on.next() {
+			nn.addNode(on.clone())
+			nn = nn.next()
+		}
 	}
 
 	return newListNode(this.line, this.col, fn)
+}
+
+func (this *ListNode) setLiteral() {
+
+	for n := this.firstChild; n != nil; n = n.next() {
+		n.setLiteral()
+	}
 }
 
 func printNode(ws *Workspace, n Node, includeBrackets bool) {
@@ -218,23 +231,22 @@ func evalList(frame Frame, node *ListNode) (*ListNode, error) {
 
 	var fn Node
 	var ln Node
-	var en Node
-	var err error
+	var rv *CallResult
 	n := node.firstChild
 	for n != nil {
-		en, n, err = evaluateNode(frame, n, true)
-		if err != nil {
-			return nil, err
+		rv, n = evaluateNode(frame, n, true)
+		if rv.hasError() {
+			return nil, rv.err
 		}
 		if fn == nil {
-			fn = en
+			fn = rv.returnValue
 		} else {
-			ln.addNode(en)
+			ln.addNode(rv.returnValue)
 		}
-		ln = en
+		ln = rv.returnValue
 	}
 
-	nln := newListNode(-1, -1, fn).(*ListNode)
+	nln := newListNode(-1, -1, fn)
 
 	return nln, nil
 }
@@ -286,4 +298,14 @@ func nodesEqual(x, y Node, numericCompare bool) bool {
 
 func createNumericNode(n float64) Node {
 	return newWordNode(-1, -1, fmt.Sprint(n), true)
+}
+
+func dumpNodes(frame Frame, n Node, max int) {
+
+	for n != nil && max >= 0 {
+		frame.workspace().print(n.String() + " ")
+		n = n.next()
+		max--
+	}
+	frame.workspace().print("\n")
 }

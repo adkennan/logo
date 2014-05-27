@@ -10,12 +10,36 @@ type Variable struct {
 	buried bool
 }
 
+type CallResult struct {
+	returnValue Node
+	err         error
+	stopped     bool
+}
+
+func (this *CallResult) hasError() bool { return this.err != nil }
+
+func (this *CallResult) hasReturnVal() bool { return this.returnValue != nil }
+
+func (this *CallResult) shouldStop() bool { return this.err != nil || this.stopped }
+
+func returnResult(node Node) *CallResult {
+	return &CallResult{node, nil, false}
+}
+
+func errorResult(err error) *CallResult {
+	return &CallResult{nil, err, false}
+}
+
+func stopResult() *CallResult {
+	return &CallResult{nil, nil, true}
+}
+
 type Frame interface {
 	workspace() *Workspace
 	parentFrame() Frame
 	depth() int
 	caller() *WordNode
-	eval(parameters []Node) (Node, error)
+	eval(parameters []Node) *CallResult
 	setTestValue(node Node)
 	getTestValue() Node
 	createLocal(name string)
@@ -28,7 +52,7 @@ type Procedure interface {
 	createFrame(parentFrame Frame, caller *WordNode) Frame
 }
 
-type evaluator func(Frame, []Node) (Node, error)
+type evaluator func(Frame, []Node) *CallResult
 
 type BuiltInProcedure struct {
 	name       string
@@ -70,7 +94,8 @@ func (this *BuiltInFrame) caller() *WordNode {
 	return this.callerNode
 }
 
-func (this *BuiltInFrame) eval(parameters []Node) (Node, error) {
+func (this *BuiltInFrame) eval(parameters []Node) *CallResult {
+
 	return this.realProc(this, parameters)
 }
 
@@ -131,10 +156,10 @@ func (this *RootFrame) caller() *WordNode {
 	return nil
 }
 
-func (this *RootFrame) eval(parameters []Node) (Node, error) {
+func (this *RootFrame) eval(parameters []Node) *CallResult {
 
 	ln := newListNode(-1, -1, this.node)
-	return evalInstructionList(this, ln, false)
+	return evaluateList(this, ln)
 }
 
 func (this *RootFrame) setTestValue(node Node) {
@@ -179,7 +204,12 @@ type InterpretedFrame struct {
 	returnVal  Node
 	testVal    Node
 	vars       map[string]*Variable
-	exit       bool
+	stopped    bool
+	aborted    bool
+}
+
+func (this *InterpretedFrame) abort() {
+	this.aborted = true
 }
 
 func (this *InterpretedFrame) workspace() *Workspace {
@@ -198,34 +228,43 @@ func (this *InterpretedFrame) depth() int {
 	return this.d
 }
 
-func (this *InterpretedFrame) eval(parameters []Node) (Node, error) {
+func (this *InterpretedFrame) eval(parameters []Node) *CallResult {
 
 	for px := 0; px < len(parameters); px++ {
 		this.createLocal(this.procedure.parameters[px])
 		this.setVariable(this.procedure.parameters[px], parameters[px])
 	}
 
-	var err error
+	var rv *CallResult
 	for n := this.procedure.firstNode; n != nil; {
-		_, n, err = callProcedure(this, n, true)
-		if err != nil {
-			return nil, err
+		rv, n = callProcedure(this, n, true)
+		if this.aborted {
+			return errorResult(errorUserStopped(this.callerNode))
 		}
-		if this.exit {
+		if rv != nil {
+			if rv.hasError() {
+				return rv
+			}
+		}
+
+		if this.stopped {
 			break
 		}
 	}
 
-	return this.returnVal, nil
+	if this.returnVal == nil {
+		return nil
+	}
+	return returnResult(this.returnVal)
 }
 
 func (this *InterpretedFrame) setReturnValue(returnVal Node) {
 	this.returnVal = returnVal
-	this.exit = true
+	this.stopped = true
 }
 
 func (this *InterpretedFrame) stop() {
-	this.exit = true
+	this.stopped = true
 }
 
 func (this *InterpretedFrame) setTestValue(node Node) {
@@ -255,45 +294,56 @@ func (this *InterpretedFrame) setVariable(name string, value Node) {
 
 func (this *InterpretedFrame) getVariable(name string) Node {
 
+	var n Node
 	v, exists := this.vars[strings.ToUpper(name)]
 	if exists {
-		return v.value
-	} else if this.parent == nil {
-		return nil
-	} else {
-		return this.parent.getVariable(name)
+		n = v.value
+	} else if this.parent != nil {
+		n = this.parent.getVariable(name)
 	}
+
+	return n
 }
 
-func callProcedure(frame Frame, node Node, withInfix bool) (Node, Node, error) {
+func isProcedure(wn *WordNode, ws *Workspace) bool {
+	if wn.value[0] == ':' {
+		return true
+	}
+	procName := strings.ToUpper(wn.value)
+	return ws.findProcedure(procName) != nil
+}
+
+func callProcedure(frame Frame, node Node, withInfix bool) (*CallResult, Node) {
 
 	wn := node.(*WordNode)
 	if wn == nil {
-		return nil, nil, errorWordExpected(node)
+		return errorResult(errorWordExpected(node)), nil
 	}
 
 	var proc Procedure
 	var parameters []Node
+	var procName string
 	if wn.value[0] == ':' {
 		proc = frame.workspace().findProcedure(keywordThing)
+		procName = keywordThing
 		c, r := wn.position()
 		parameters = []Node{newWordNode(c, r, string(wn.value[1:]), true)}
 		node = node.next()
 	} else {
 		if wn.isLiteral {
-			return nil, nil, errorProcedureExpected(node)
+			return errorResult(errorProcedureExpected(node)), nil
 		}
-		procName := strings.ToUpper(wn.value)
+		procName = strings.ToUpper(wn.value)
 		proc = frame.workspace().findProcedure(procName)
 
 		if proc == nil {
-			return nil, nil, errorProcedureNotFound(node, wn.value)
+			return errorResult(errorProcedureNotFound(node, wn.value)), nil
 		}
 		var err error
 		if proc.parameterCount() > 0 {
 			parameters, node, err = fetchParameters(frame, wn, node.next(), proc.parameterCount(), withInfix)
 			if err != nil {
-				return nil, nil, err
+				return errorResult(err), nil
 			}
 		} else {
 			parameters = make([]Node, 0, 0)
@@ -302,76 +352,88 @@ func callProcedure(frame Frame, node Node, withInfix bool) (Node, Node, error) {
 	}
 
 	subFrame := proc.createFrame(frame, wn)
+	frame.workspace().currentFrame = subFrame
+	defer func() { frame.workspace().currentFrame = frame }()
 
-	rv, err := subFrame.eval(parameters)
-	if err != nil {
-		return nil, nil, err
+	print("Calling ", procName, "(")
+	for _, p := range parameters {
+		print(p.String(), " ")
 	}
+	print(") = ")
 
-	return rv, node, nil
+	rv := subFrame.eval(parameters)
+
+	if rv != nil {
+		if rv.hasError() {
+			println("ERROR: ", rv.err.Error())
+			return rv, nil
+		} else if rv.returnValue != nil {
+			println("{ ", rv.returnValue.String(), " }")
+		} else {
+			println("<NIL>")
+		}
+	} else {
+		println("<NIL>")
+	}
+	return rv, node
 }
 
-func evaluateList(frame Frame, list *ListNode) (Node, error) {
-
-	procFrame, _ := findInterpretedFrame(frame)
+func evaluateList(frame Frame, list *ListNode) *CallResult {
 
 	var fn Node = nil
 	var cn Node = nil
-	var tn Node = nil
-	var err error = nil
+	var rv *CallResult
 	for n := list.firstChild; n != nil; {
-		tn, n, err = evaluateNode(frame, n, true)
-		if err != nil {
-			return nil, err
-		}
+		rv, n = evaluateNode(frame, n, true)
+		if rv != nil {
+			if rv.hasError() {
+				return rv
+			}
+			if rv.stopped {
+				break
+			}
 
-		if fn == nil {
-			fn = tn
-		} else {
-			cn.addNode(tn)
-		}
-		cn = tn
-
-		if procFrame != nil && procFrame.exit {
-			break
+			if fn == nil {
+				fn = rv.returnValue
+			} else {
+				cn.addNode(rv.returnValue)
+			}
+			cn = rv.returnValue
 		}
 	}
 
-	return newListNode(list.line, list.col, fn), nil
+	return returnResult(newListNode(list.line, list.col, fn))
 }
 
-func evalInstructionList(frame Frame, node Node, canReturn bool) (Node, error) {
+func evalInstructionList(frame Frame, node Node, canReturn bool) *CallResult {
 
 	switch ln := node.(type) {
 	case *WordNode:
-		return nil, errorListExpected(node)
+		return errorResult(errorListExpected(node))
 	case *ListNode:
-		procFrame, _ := findInterpretedFrame(frame)
-		var v Node
-		var err error
+		var r *CallResult
 		for n := ln.firstChild; n != nil; {
-			v, n, err = evaluateNode(frame, n, true)
-			if err != nil {
-				return nil, err
-			}
-			if v != nil {
-				if canReturn {
-					return v, nil
+			r, n = evaluateNode(frame, n, true)
+			if r != nil {
+				if r.shouldStop() {
+					return r
 				}
-				return nil, errorReturnValueUnused(v)
-			}
-			if procFrame != nil && procFrame.exit {
-				return nil, nil
+				if r.hasReturnVal() {
+					if canReturn {
+						return r
+					}
+					return errorResult(errorReturnValueUnused(r.returnValue))
+				}
 			}
 		}
 	}
 
-	return nil, nil
+	return nil
 }
 
 var infixOps []string = []string{"+", "-", "*", "/", "(", ")", "=", "<>", "<", ">", "<=", ">=", "OR", "AND"}
 var infixProc []string = []string{"SUM", "DIFFERENCE", "PRODUCT", "QUOTIENT", "", "", "EQUALP", "NOTEQUALP", "LESSP", "GREATERP", "LESSEQUALP", "GREATEREQUALP", "EITHER", "BOTH"}
-var infixPrec []int = []int{1, 1, 2, 2, 3, 4, 4, 5, 5, 5, 5, 5, 5, 6, 6}
+var infixPrec []int = []int{1, 1, 2, 2, 3, 4, 4, 0, 0, 0, 0, 0, 0, 0, 0}
 
 func getInfixOp(nodeVal string) int {
 	if len(nodeVal) > 3 {
@@ -387,14 +449,13 @@ func getInfixOp(nodeVal string) int {
 	return -1
 }
 
-func evaluateExpression(frame Frame, n Node) (Node, Node, error) {
+func evaluateExpression(frame Frame, n Node) (*CallResult, Node) {
 
 	nl := make([]Node, 0, 2)
 	ops := make([]string, 0, 2)
 	expectOp := false
 	exit := false
 	var prevIx int = -2
-	var err error = nil
 	braceCount := 0
 	for !exit && n != nil {
 
@@ -404,6 +465,7 @@ func evaluateExpression(frame Frame, n Node) (Node, Node, error) {
 			if ix >= 0 {
 				if ix == 4 {
 					if prevIx == -1 || prevIx == 5 {
+						println("exit 1")
 						exit = true
 						break
 					}
@@ -412,20 +474,21 @@ func evaluateExpression(frame Frame, n Node) (Node, Node, error) {
 				if ix == 5 {
 					braceCount--
 					if braceCount < 0 {
+						println("exit 2")
 						exit = true
 						break
 					}
 				}
 				if nn.value == "-" && (prevIx == -2 || (prevIx >= 0 && prevIx != 5)) && nn.next() != nil {
 					// Looks like a unary minus
-					var vn Node
-					vn, n, err = evaluateNode(frame, nn.next(), true)
-					if err != nil {
-						return nil, nil, err
+					var rv *CallResult
+					rv, n = evaluateNode(frame, nn.next(), true)
+					if rv.shouldStop() {
+						return rv, nil
 					}
-					v, err := evalToNumber(vn)
+					v, err := evalToNumber(rv.returnValue)
 					if err != nil {
-						return nil, nil, err
+						return errorResult(err), nil
 					}
 
 					nwn := createNumericNode(0.0 - v).(*WordNode)
@@ -441,7 +504,7 @@ func evaluateExpression(frame Frame, n Node) (Node, Node, error) {
 							l, c := nn.position()
 							procName := infixProc[popIx]
 							if procName != "" {
-								nwn := newWordNode(l, c, procName, false).(*WordNode)
+								nwn := newWordNode(l, c, procName, false)
 								nwn.isInfix = true
 								nl = append(nl, nwn)
 							}
@@ -460,24 +523,22 @@ func evaluateExpression(frame Frame, n Node) (Node, Node, error) {
 			} else {
 				if expectOp {
 					exit = true
-				} else {
-
-					if nn.isLiteral {
-						nl = append(nl, nn.clone())
-						n = n.next()
-						expectOp = true
-					} else {
-						var p Node
-						var err error
-						p, n, err = callProcedure(frame, nn, true)
-						if err != nil {
-							return nil, nil, err
+				} else if !nn.isLiteral {
+					var rv *CallResult
+					rv, n = callProcedure(frame, nn, true)
+					if rv != nil {
+						if rv.shouldStop() {
+							return rv, nil
 						}
-						if p != nil {
-							nl = append(nl, p)
+						if rv.returnValue != nil {
+							nl = append(nl, rv.returnValue.clone())
 							expectOp = true
 						}
 					}
+				} else {
+					nl = append(nl, nn.clone())
+					n = n.next()
+					expectOp = true
 				}
 			}
 			prevIx = ix
@@ -493,67 +554,74 @@ func evaluateExpression(frame Frame, n Node) (Node, Node, error) {
 
 		procName := infixProc[popIx]
 		if procName != "" {
-			nwn := newWordNode(-1, -1, procName, false).(*WordNode)
+			nwn := newWordNode(-1, -1, procName, false)
 			nwn.isInfix = true
 			nl = append(nl, nwn)
 		}
 		ops = ops[0 : len(ops)-1]
 	}
 
+	var rv *CallResult
 	if len(nl) == 1 {
-		nl[0].addNode(n)
-		return nl[0], n, nil
+		println("a:", nl[0].String())
+		rv, _ = evaluateNode(frame, nl[0], false)
 	} else if len(nl) > 1 {
 
 		ix := len(nl) - 1
 		fn := nl[ix]
 		nn := fn
 		ix--
+		print("b:", fn.String(), " ")
 		for ix >= 0 {
+			print(nl[ix].String(), " ")
 			nn.addNode(nl[ix])
 			nn = nn.next()
 			ix--
 		}
+		println()
 
-		res, _, err := callProcedure(frame, fn, false)
-		if res != nil {
-			res.addNode(n)
-		}
-		return res, n, err
+		rv, _ = evaluateNode(frame, fn, false)
 	}
-	return nil, n, nil
+	if rv != nil {
+		if rv.shouldStop() {
+			return rv, nil
+		}
+		if rv.returnValue != nil {
+			rv.returnValue.addNode(n)
+		}
+	}
+	return rv, n
 }
 
-func evaluateNode(frame Frame, node Node, withInfix bool) (Node, Node, error) {
+func evaluateNode(frame Frame, node Node, withInfix bool) (*CallResult, Node) {
 
 	switch nn := node.(type) {
 	case *WordNode:
 		if withInfix {
 			return evaluateExpression(frame, node)
 		} else {
-			if nn.isLiteral {
-				return nn, nn.next(), nil
-			} else {
-				p, node, err := callProcedure(frame, node, withInfix)
-				if err != nil {
-					return nil, nil, err
+			if !nn.isLiteral {
+				rv, node := callProcedure(frame, node, withInfix)
+				if rv != nil && rv.shouldStop() {
+					return rv, nil
 				}
-				return p, node, nil
+				return rv, node
+			} else {
+				return returnResult(nn), nn.next()
 			}
 		}
 	case *ListNode:
-		return nn, node.next(), nil
+		return returnResult(nn), node.next()
 	}
 
-	return nil, nil, nil
+	return nil, nil
 }
 
 func fetchParameters(frame Frame, caller *WordNode, firstNode Node, paramCount int, withInfix bool) ([]Node, Node, error) {
 	params := make([]Node, 0, paramCount)
 
 	n := firstNode
-	var p Node
-	var err error
+	var rv *CallResult
 	for ix := 0; ix < paramCount; ix++ {
 		if n == nil {
 			return nil, nil, errorNotEnoughParameters(caller, firstNode)
@@ -561,11 +629,13 @@ func fetchParameters(frame Frame, caller *WordNode, firstNode Node, paramCount i
 
 		switch nn := n.(type) {
 		case *WordNode:
-			p, n, err = evaluateNode(frame, nn, withInfix)
-			if err != nil {
-				return nil, nil, err
+			rv, n = evaluateNode(frame, nn, withInfix)
+			if rv != nil {
+				if rv.hasError() {
+					return nil, nil, rv.err
+				}
+				params = append(params, rv.returnValue)
 			}
-			params = append(params, p)
 
 		case *ListNode:
 			params = append(params, nn)
@@ -586,7 +656,7 @@ type InterpretedProcedure struct {
 func (this *InterpretedProcedure) createFrame(parentFrame Frame, caller *WordNode) Frame {
 
 	parentFrame.workspace().trace(parentFrame.depth(), this.name)
-	return &InterpretedFrame{parentFrame.workspace(), parentFrame, parentFrame.depth() + 1, caller, this, nil, nil, make(map[string]*Variable), false}
+	return &InterpretedFrame{parentFrame.workspace(), parentFrame, parentFrame.depth() + 1, caller, this, nil, nil, make(map[string]*Variable), false, false}
 }
 
 func (this *InterpretedProcedure) parameterCount() int {

@@ -293,11 +293,11 @@ func normAngle(d float64) float64 {
 	return d
 }
 
-func _t_Forward(frame Frame, parameters []Node) (Node, error) {
+func _t_Forward(frame Frame, parameters []Node) *CallResult {
 
 	delta, err := evalToNumber(parameters[0])
 	if err != nil {
-		return nil, err
+		return errorResult(err)
 	}
 
 	t := frame.workspace().turtle
@@ -309,14 +309,14 @@ func _t_Forward(frame Frame, parameters []Node) (Node, error) {
 	t.x = x2
 	t.y = y2
 
-	return nil, nil
+	return nil
 }
 
-func _t_Back(frame Frame, parameters []Node) (Node, error) {
+func _t_Back(frame Frame, parameters []Node) *CallResult {
 
 	delta, err := evalToNumber(parameters[0])
 	if err != nil {
-		return nil, err
+		return errorResult(err)
 	}
 
 	t := frame.workspace().turtle
@@ -328,14 +328,14 @@ func _t_Back(frame Frame, parameters []Node) (Node, error) {
 	t.x = x2
 	t.y = y2
 
-	return nil, nil
+	return nil
 }
 
-func _t_Left(frame Frame, parameters []Node) (Node, error) {
+func _t_Left(frame Frame, parameters []Node) *CallResult {
 
 	delta, err := evalToNumber(parameters[0])
 	if err != nil {
-		return nil, err
+		return errorResult(err)
 	}
 
 	t := frame.workspace().turtle
@@ -346,14 +346,14 @@ func _t_Left(frame Frame, parameters []Node) (Node, error) {
 
 	t.updateSprite()
 
-	return nil, nil
+	return nil
 }
 
-func _t_Right(frame Frame, parameters []Node) (Node, error) {
+func _t_Right(frame Frame, parameters []Node) *CallResult {
 
 	delta, err := evalToNumber(parameters[0])
 	if err != nil {
-		return nil, err
+		return errorResult(err)
 	}
 
 	t := frame.workspace().turtle
@@ -364,49 +364,49 @@ func _t_Right(frame Frame, parameters []Node) (Node, error) {
 
 	t.updateSprite()
 
-	return nil, nil
+	return nil
 }
 
-func _t_ShowTurtle(frame Frame, parameters []Node) (Node, error) {
+func _t_ShowTurtle(frame Frame, parameters []Node) *CallResult {
 	t := frame.workspace().turtle
 	t.turtleState = turtleStateShown
 
 	t.refreshTurtle()
-	return nil, nil
+	return nil
 }
 
-func _t_HideTurtle(frame Frame, parameters []Node) (Node, error) {
+func _t_HideTurtle(frame Frame, parameters []Node) *CallResult {
 	t := frame.workspace().turtle
 	t.turtleState = turtleStateHidden
 
 	t.refreshTurtle()
-	return nil, nil
+	return nil
 }
 
-func _t_PenUp(frame Frame, parameters []Node) (Node, error) {
+func _t_PenUp(frame Frame, parameters []Node) *CallResult {
 	t := frame.workspace().turtle
 	t.penState = penStateUp
 
-	return nil, nil
+	return nil
 }
 
-func _t_PenDown(frame Frame, parameters []Node) (Node, error) {
+func _t_PenDown(frame Frame, parameters []Node) *CallResult {
 	t := frame.workspace().turtle
 	t.penState = penStateDown
 
-	return nil, nil
+	return nil
 }
 
-func _t_ClearScreen(frame Frame, parameters []Node) (Node, error) {
+func _t_ClearScreen(frame Frame, parameters []Node) *CallResult {
 
 	_t_Home(frame, parameters)
 
 	frame.workspace().turtle.clear()
 
-	return nil, nil
+	return nil
 }
 
-func _t_Home(frame Frame, parameters []Node) (Node, error) {
+func _t_Home(frame Frame, parameters []Node) *CallResult {
 
 	t := frame.workspace().turtle
 	t.drawLine(int(t.x), int(t.y), 0, 0)
@@ -417,14 +417,14 @@ func _t_Home(frame Frame, parameters []Node) (Node, error) {
 
 	t.updateSprite()
 
-	return nil, nil
+	return nil
 }
 
-func _t_SetHeading(frame Frame, parameters []Node) (Node, error) {
+func _t_SetHeading(frame Frame, parameters []Node) *CallResult {
 
 	d, err := evalToNumber(parameters[0])
 	if err != nil {
-		return nil, err
+		return errorResult(err)
 	}
 
 	t := frame.workspace().turtle
@@ -435,15 +435,15 @@ func _t_SetHeading(frame Frame, parameters []Node) (Node, error) {
 
 	t.updateSprite()
 
-	return nil, nil
+	return nil
 
 }
 
-func _t_SetX(frame Frame, parameters []Node) (Node, error) {
+func _t_SetX(frame Frame, parameters []Node) *CallResult {
 
 	x, err := evalToNumber(parameters[0])
 	if err != nil {
-		return nil, err
+		return errorResult(err)
 	}
 
 	t := frame.workspace().turtle
@@ -451,14 +451,14 @@ func _t_SetX(frame Frame, parameters []Node) (Node, error) {
 
 	t.x = x
 
-	return nil, nil
+	return nil
 }
 
-func _t_SetY(frame Frame, parameters []Node) (Node, error) {
+func _t_SetY(frame Frame, parameters []Node) *CallResult {
 
 	y, err := evalToNumber(parameters[0])
 	if err != nil {
-		return nil, err
+		return errorResult(err)
 	}
 
 	t := frame.workspace().turtle
@@ -466,29 +466,29 @@ func _t_SetY(frame Frame, parameters []Node) (Node, error) {
 
 	t.y = y
 
-	return nil, nil
+	return nil
 }
 
-func _t_SetPos(frame Frame, parameters []Node) (Node, error) {
+func _t_SetPos(frame Frame, parameters []Node) *CallResult {
 
 	switch l := parameters[0].(type) {
 	case *ListNode:
 
 		ll, err := evalList(frame, l)
 		if err != nil {
-			return nil, err
+			return errorResult(err)
 		}
 		if ll.length() != 2 {
-			return nil, errorListOfNItemsExpected(l, 2)
+			return errorResult(errorListOfNItemsExpected(l, 2))
 		}
 
 		x, err := evalToNumber(ll.firstChild)
 		if err != nil {
-			return nil, err
+			return errorResult(err)
 		}
 		y, err := evalToNumber(ll.firstChild.next())
 		if err != nil {
-			return nil, err
+			return errorResult(err)
 		}
 
 		t := frame.workspace().turtle
@@ -497,56 +497,56 @@ func _t_SetPos(frame Frame, parameters []Node) (Node, error) {
 		t.x = x
 		t.y = y
 
-		return nil, nil
+		return nil
 	}
 
-	return nil, errorListExpected(parameters[0])
+	return errorResult(errorListExpected(parameters[0]))
 }
 
-func _t_Heading(frame Frame, parameters []Node) (Node, error) {
+func _t_Heading(frame Frame, parameters []Node) *CallResult {
 
 	t := frame.workspace().turtle
-	return createNumericNode(t.d), nil
+	return returnResult(createNumericNode(t.d))
 }
 
-func _t_Pos(frame Frame, parameters []Node) (Node, error) {
+func _t_Pos(frame Frame, parameters []Node) *CallResult {
 
 	t := frame.workspace().turtle
 	fn := createNumericNode(t.x)
 	fn.addNode(createNumericNode(t.y))
 
-	return newListNode(-1, -1, fn), nil
+	return returnResult(newListNode(-1, -1, fn))
 }
 
-func _t_Shownp(frame Frame, parameters []Node) (Node, error) {
+func _t_Shownp(frame Frame, parameters []Node) *CallResult {
 
 	t := frame.workspace().turtle
 	if t.turtleState == turtleStateShown {
-		return trueNode, nil
+		return returnResult(trueNode)
 	}
-	return falseNode, nil
+	return returnResult(falseNode)
 }
 
-func _t_Towards(frame Frame, parameters []Node) (Node, error) {
-	return nil, nil
+func _t_Towards(frame Frame, parameters []Node) *CallResult {
+	return nil
 }
 
-func _t_XCor(frame Frame, parameters []Node) (Node, error) {
+func _t_XCor(frame Frame, parameters []Node) *CallResult {
 
 	t := frame.workspace().turtle
-	return createNumericNode(t.x), nil
+	return returnResult(createNumericNode(t.x))
 }
 
-func _t_YCor(frame Frame, parameters []Node) (Node, error) {
+func _t_YCor(frame Frame, parameters []Node) *CallResult {
 	t := frame.workspace().turtle
-	return createNumericNode(t.y), nil
+	return returnResult(createNumericNode(t.y))
 }
 
-func _t_Text(frame Frame, parameters []Node) (Node, error) {
+func _t_Text(frame Frame, parameters []Node) *CallResult {
 
 	fx, fy, err := evalNumericParams(parameters[0], parameters[1])
 	if err != nil {
-		return nil, err
+		return errorResult(err)
 	}
 	buf := &bytes.Buffer{}
 	nodeToText(buf, parameters[2], false)
@@ -565,7 +565,7 @@ func _t_Text(frame Frame, parameters []Node) (Node, error) {
 
 	t.addDirtyRegion(x1, ny, nx, ny+gm.charHeight)
 
-	return nil, nil
+	return nil
 }
 
 func evalToColorPart(n Node) (uint8, error) {
@@ -581,7 +581,7 @@ func evalToColorPart(n Node) (uint8, error) {
 	return uint8(v), nil
 }
 
-func _t_PenColor(frame Frame, parameters []Node) (Node, error) {
+func _t_PenColor(frame Frame, parameters []Node) *CallResult {
 
 	var c color.RGBA
 
@@ -589,36 +589,36 @@ func _t_PenColor(frame Frame, parameters []Node) (Node, error) {
 	case *WordNode:
 		cc, ok := colorsMap[strings.ToLower(p.value)]
 		if !ok {
-			return nil, errorUnknownColor(p, p.value)
+			return errorResult(errorUnknownColor(p, p.value))
 		}
 		c = cc
 	case *ListNode:
 		ep, err := evalList(frame, p)
 		if err != nil {
-			return nil, err
+			return errorResult(err)
 		}
 		if ep.length() != 3 {
-			return nil, errorListOfNItemsExpected(p, 3)
+			return errorResult(errorListOfNItemsExpected(p, 3))
 		}
 		n := ep.firstChild
 		r, err := evalToColorPart(n)
 		if err != nil {
-			return nil, err
+			return errorResult(err)
 		}
 		n = n.next()
 		g, err := evalToColorPart(n)
 		if err != nil {
-			return nil, err
+			return errorResult(err)
 		}
 		n = n.next()
 		b, err := evalToColorPart(n)
 		if err != nil {
-			return nil, err
+			return errorResult(err)
 		}
 
 		c = color.RGBA{r, g, b, 0xff}
 	}
 
 	frame.workspace().turtle.penColor = c
-	return nil, nil
+	return nil
 }
