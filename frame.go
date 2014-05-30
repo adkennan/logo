@@ -353,27 +353,16 @@ func callProcedure(frame Frame, node Node, withInfix bool) (*CallResult, Node) {
 
 	subFrame := proc.createFrame(frame, wn)
 	frame.workspace().currentFrame = subFrame
-	defer func() { frame.workspace().currentFrame = frame }()
-
-	print("Calling ", procName, "(")
-	for _, p := range parameters {
-		print(p.String(), " ")
-	}
-	print(") = ")
+	defer func() {
+		frame.workspace().currentFrame = frame
+	}()
 
 	rv := subFrame.eval(parameters)
 
 	if rv != nil {
 		if rv.hasError() {
-			println("ERROR: ", rv.err.Error())
 			return rv, nil
-		} else if rv.returnValue != nil {
-			println("{ ", rv.returnValue.String(), " }")
-		} else {
-			println("<NIL>")
 		}
-	} else {
-		println("<NIL>")
 	}
 	return rv, node
 }
@@ -465,7 +454,6 @@ func evaluateExpression(frame Frame, n Node) (*CallResult, Node) {
 			if ix >= 0 {
 				if ix == 4 {
 					if prevIx == -1 || prevIx == 5 {
-						println("exit 1")
 						exit = true
 						break
 					}
@@ -474,7 +462,6 @@ func evaluateExpression(frame Frame, n Node) (*CallResult, Node) {
 				if ix == 5 {
 					braceCount--
 					if braceCount < 0 {
-						println("exit 2")
 						exit = true
 						break
 					}
@@ -518,7 +505,7 @@ func evaluateExpression(frame Frame, n Node) (*CallResult, Node) {
 					}
 					ops = append(ops, nn.value)
 					n = n.next()
-					expectOp = false
+					expectOp = ix == 5
 				}
 			} else {
 				if expectOp {
@@ -563,7 +550,6 @@ func evaluateExpression(frame Frame, n Node) (*CallResult, Node) {
 
 	var rv *CallResult
 	if len(nl) == 1 {
-		println("a:", nl[0].String())
 		rv, _ = evaluateNode(frame, nl[0], false)
 	} else if len(nl) > 1 {
 
@@ -571,14 +557,11 @@ func evaluateExpression(frame Frame, n Node) (*CallResult, Node) {
 		fn := nl[ix]
 		nn := fn
 		ix--
-		print("b:", fn.String(), " ")
 		for ix >= 0 {
-			print(nl[ix].String(), " ")
 			nn.addNode(nl[ix])
 			nn = nn.next()
 			ix--
 		}
-		println()
 
 		rv, _ = evaluateNode(frame, fn, false)
 	}
