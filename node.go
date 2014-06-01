@@ -12,6 +12,7 @@ type NodeType int
 const (
 	Word NodeType = iota
 	List
+	Group
 )
 
 type Node interface {
@@ -32,9 +33,10 @@ type BaseNode struct {
 
 type WordNode struct {
 	BaseNode
-	value     string
-	isLiteral bool
-	isInfix   bool
+	value          string
+	isLiteral      bool
+	isInfix        bool
+	isFirstOfGroup bool
 }
 
 func newWordNode(line, col int, value string, isLiteral bool) *WordNode {
@@ -64,6 +66,7 @@ func (this *WordNode) String() string {
 func (this *WordNode) clone() Node {
 	n := newWordNode(this.line, this.col, this.value, this.isLiteral)
 	n.isInfix = this.isInfix
+	n.isFirstOfGroup = this.isFirstOfGroup
 	return n
 }
 
@@ -128,6 +131,71 @@ func (this *ListNode) clone() Node {
 }
 
 func (this *ListNode) setLiteral() {
+
+	for n := this.firstChild; n != nil; n = n.next() {
+		n.setLiteral()
+	}
+}
+
+type GroupNode struct {
+	BaseNode
+	firstChild Node
+}
+
+func newGroupNode(line, col int, firstChild Node) *GroupNode {
+	n := &GroupNode{}
+	n.BaseNode.line = line
+	n.BaseNode.col = col
+	n.firstChild = firstChild
+
+	return n
+}
+
+func (this *GroupNode) nodeType() NodeType { return Group }
+
+func (this *GroupNode) next() Node { return this.BaseNode.next }
+
+func (this *GroupNode) addNode(node Node) {
+	this.BaseNode.next = node
+}
+
+func (this *GroupNode) position() (int, int) { return this.line, this.col }
+
+func (this *GroupNode) String() string {
+	s := "( "
+	n := this.firstChild
+	for n != nil {
+		s += n.String() + " "
+		n = n.next()
+	}
+	s += ")"
+
+	return s
+}
+
+func (this *GroupNode) length() int {
+	n := 0
+	for c := this.firstChild; c != nil; c = c.next() {
+		n++
+	}
+	return n
+}
+
+func (this *GroupNode) clone() Node {
+	var fn Node
+	if this.firstChild != nil {
+		fn = this.firstChild.clone()
+		var nn = fn
+		for on := this.firstChild.next(); on != nil; on = on.next() {
+			nn.addNode(on.clone())
+			nn = nn.next()
+		}
+	}
+
+	return newListNode(this.line, this.col, fn)
+}
+
+func (this *GroupNode) setLiteral() {
 
 	for n := this.firstChild; n != nil; n = n.next() {
 		n.setLiteral()

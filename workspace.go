@@ -121,7 +121,16 @@ func (this *Workspace) findProcedure(name string) Procedure {
 }
 
 func (this *Workspace) registerBuiltIn(longName, shortName string, paramCount int, f evaluator) {
-	p := &BuiltInProcedure{longName, paramCount, f}
+	p := &BuiltInProcedure{longName, paramCount, false, f}
+
+	this.procedures[longName] = p
+	if shortName != "" {
+		this.procedures[shortName] = p
+	}
+}
+
+func (this *Workspace) registerBuiltInWithVarParams(longName, shortName string, paramCount int, f evaluator) {
+	p := &BuiltInProcedure{longName, paramCount, true, f}
 
 	this.procedures[longName] = p
 	if shortName != "" {
@@ -142,7 +151,7 @@ func (this *Workspace) evaluate(source string) error {
 	}()
 
 	rv := this.rootFrame.eval(make([]Node, 0, 0))
-	if rv.hasError() {
+	if rv != nil && rv.hasError() {
 		return rv.err
 	}
 	return nil

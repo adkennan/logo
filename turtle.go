@@ -17,6 +17,9 @@ const (
 	penModeErase
 	turtleStateShown
 	turtleStateHidden
+	borderModeWindow
+	borderModeFence
+	borderModeWrap
 )
 
 const turtleSize = 14
@@ -68,6 +71,7 @@ type Turtle struct {
 	turtleState int
 	penState    int
 	penMode     int
+	borderMode  int
 	penColor    color.RGBA
 	screenColor color.RGBA
 	floodColor  color.RGBA
@@ -231,7 +235,7 @@ func (this *Turtle) updateSprite() {
 	r.SetColor(turtleColor)
 	r.FillTriangle(x1, y1, x2, y2, x3, y3)
 
-	this.addDirtyRegion(tx, ty, tx+turtleSize*2, ty+turtleSize*2)
+	this.addDirtyRegion(tx-turtleSize, ty-turtleSize, tx+turtleSize, ty+turtleSize)
 }
 
 func (this *Turtle) refreshTurtle() {
@@ -243,7 +247,8 @@ func (this *Turtle) refreshTurtle() {
 
 func initTurtle(ws *Workspace) *Turtle {
 	turtle := &Turtle{
-		0, 0, 0, 1.0, turtleStateShown, penStateDown, penModePaint, colorWhite, colorBlack, colorWhite, ws, nil, nil, nil, nil, 0, &sync.Mutex{}}
+		0, 0, 0, 1.0, turtleStateShown, penStateDown, penModePaint, borderModeWindow,
+		colorWhite, colorBlack, colorWhite, ws, nil, nil, nil, nil, 0, &sync.Mutex{}}
 
 	turtle.sprite = ws.screen.screen.CreateSurface(turtleSize*2, turtleSize*2)
 	turtle.image = ws.screen.screen.CreateSurface(ws.screen.screen.W(), ws.screen.screen.H())
@@ -277,6 +282,8 @@ func initTurtle(ws *Workspace) *Turtle {
 	ws.registerBuiltIn("YCOR", "", 0, _t_YCor)
 	ws.registerBuiltIn("TEXT", "", 3, _t_Text)
 
+	ws.registerBuiltIn("CLEAN", "", 0, _t_Clean)
+	ws.registerBuiltIn("DOT", "", 1, _t_Dot)
 	go turtle.tick()
 
 	return turtle
@@ -304,10 +311,12 @@ func _t_Forward(frame Frame, parameters []Node) *CallResult {
 	x2 := t.x - math.Cos(normAngle(t.d)*dToR)*delta
 	y2 := t.y + math.Sin(normAngle(t.d)*dToR)*delta
 
+	t.refreshTurtle()
 	t.drawLine(int(t.x), int(t.y), int(x2), int(y2))
 
 	t.x = x2
 	t.y = y2
+	t.refreshTurtle()
 
 	return nil
 }
@@ -323,10 +332,12 @@ func _t_Back(frame Frame, parameters []Node) *CallResult {
 	x2 := t.x + math.Cos(normAngle(t.d)*dToR)*delta
 	y2 := t.y - math.Sin(normAngle(t.d)*dToR)*delta
 
+	t.refreshTurtle()
 	t.drawLine(int(t.x), int(t.y), int(x2), int(y2))
 
 	t.x = x2
 	t.y = y2
+	t.refreshTurtle()
 
 	return nil
 }
@@ -447,9 +458,11 @@ func _t_SetX(frame Frame, parameters []Node) *CallResult {
 	}
 
 	t := frame.workspace().turtle
+	t.refreshTurtle()
 	t.drawLine(int(t.x), int(t.y), int(x), int(t.y))
 
 	t.x = x
+	t.refreshTurtle()
 
 	return nil
 }
@@ -462,9 +475,11 @@ func _t_SetY(frame Frame, parameters []Node) *CallResult {
 	}
 
 	t := frame.workspace().turtle
+	t.refreshTurtle()
 	t.drawLine(int(t.x), int(t.y), int(t.x), int(y))
 
 	t.y = y
+	t.refreshTurtle()
 
 	return nil
 }
@@ -492,11 +507,13 @@ func _t_SetPos(frame Frame, parameters []Node) *CallResult {
 		}
 
 		t := frame.workspace().turtle
+		t.refreshTurtle()
 		t.drawLine(int(t.x), int(t.y), int(x), int(y))
 
 		t.x = x
 		t.y = y
 
+		t.refreshTurtle()
 		return nil
 	}
 
@@ -620,5 +637,77 @@ func _t_PenColor(frame Frame, parameters []Node) *CallResult {
 	}
 
 	frame.workspace().turtle.penColor = c
+	return nil
+}
+
+func _t_Clean(frame Frame, parameters []Node) *CallResult {
+
+	frame.workspace().turtle.clear()
+
+	return nil
+}
+
+func _t_Dot(frame Frame, parameters []Node) *CallResult {
+
+	switch l := parameters[0].(type) {
+	case *ListNode:
+
+		ll, err := evalList(frame, l)
+		if err != nil {
+			return errorResult(err)
+		}
+		if ll.length() != 2 {
+			return errorResult(errorListOfNItemsExpected(l, 2))
+		}
+
+		x, err := evalToNumber(ll.firstChild)
+		if err != nil {
+			return errorResult(err)
+		}
+		y, err := evalToNumber(ll.firstChild.next())
+		if err != nil {
+			return errorResult(err)
+		}
+
+		t := frame.workspace().turtle
+
+		t.drawLine(int(x), int(y), int(x), int(y))
+
+		return nil
+	}
+
+	return errorResult(errorListExpected(parameters[0]))
+}
+
+func _t_Fence(frame Frame, parameters []Node) *CallResult {
+	t := frame.workspace().turtle
+	t.borderMode = borderModeFence
+	/*
+		if t.offScreen() {
+			t.x = 0
+			t.y = 0
+			t.refreshTurtle()
+		}
+	*/return nil
+}
+
+func _t_Fill(frame Frame, parameters []Node) *CallResult {
+	return nil
+}
+
+func _t_PenErase(frame Frame, parameters []Node) *CallResult {
+
+	t := frame.workspace().turtle
+	t.penMode = penModeErase
+	return nil
+}
+
+func _t_PenReverse(frame Frame, parameters []Node) *CallResult {
+	t := frame.workspace().turtle
+	t.penMode = penModeReverse
+	return nil
+}
+
+func _t_SetBg(frame Frame, parameters []Node) *CallResult {
 	return nil
 }

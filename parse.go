@@ -11,12 +11,14 @@ const comment rune = ';'
 const escape rune = '\\'
 const listStart rune = '['
 const listEnd rune = ']'
+const groupStart rune = '('
+const groupEnd rune = ')'
 const literalStart rune = '"'
 const newLine rune = '\n'
 const thingStart rune = ':'
 
-var wordSeparators = []rune{' ', '\t', newLine, comment, listEnd}
-var infixOpChars = []rune{'+', '-', '*', '/', '<', '>', '=', '(', ')'}
+var wordSeparators = []rune{' ', '\t', newLine, comment, listEnd, groupEnd}
+var infixOpChars = []rune{'+', '-', '*', '/', '<', '>', '='}
 var listSeparators = []rune{' ', '\t', newLine, comment}
 
 func ParseString(text string) (n Node, err error) {
@@ -70,6 +72,10 @@ func parse(r *bufio.Reader, line, col *int, inList bool) (n Node, err error) {
 	case listStart:
 		n, err = readList(r, line, col)
 	case listEnd:
+		r.UnreadRune()
+	case groupStart:
+		n, err = readGroup(r, line, col)
+	case groupEnd:
 		r.UnreadRune()
 	default:
 		n, err = readWord(r, line, col)
@@ -141,6 +147,28 @@ func readComment(r *bufio.Reader, line, col *int) (err error) {
 }
 
 func readList(r *bufio.Reader, line, col *int) (n Node, err error) {
+	n, err = readUntil(r, line, col, listEnd)
+
+	if err == nil {
+		return newListNode(*line, *col, n), nil
+	}
+	return nil, err
+}
+
+func readGroup(r *bufio.Reader, line, col *int) (n Node, err error) {
+	n, err = readUntil(r, line, col, groupEnd)
+
+	if err == nil {
+		wn, ok := n.(*WordNode)
+		if ok {
+			wn.isFirstOfGroup = true
+		}
+		return newGroupNode(*line, *col, n), nil
+	}
+	return nil, err
+}
+
+func readUntil(r *bufio.Reader, line, col *int, untilChar rune) (n Node, err error) {
 
 	var fn Node = nil
 	var pn Node = nil
@@ -173,7 +201,7 @@ func readList(r *bufio.Reader, line, col *int) (n Node, err error) {
 
 		checkNewline(c, line, col)
 
-		if c == listEnd {
+		if c == untilChar {
 			closed = true
 			break
 		}
@@ -184,10 +212,7 @@ func readList(r *bufio.Reader, line, col *int) (n Node, err error) {
 		err = io.ErrUnexpectedEOF
 	}
 
-	if err == nil {
-		return newListNode(*line, *col, fn), nil
-	}
-	return nil, err
+	return fn, err
 }
 
 func isNegativeNumber(pc, c rune, r *bufio.Reader) bool {

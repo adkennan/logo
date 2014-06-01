@@ -60,27 +60,27 @@ func _bi_Repeat(frame Frame, parameters []Node) *CallResult {
 
 func _bi_Print(frame Frame, parameters []Node) *CallResult {
 
-	printNode(frame.workspace(), parameters[0], false)
+	for _, p := range parameters {
+		printNode(frame.workspace(), p, false)
+	}
 	frame.workspace().print("\n")
 	return nil
 }
 
 func _bi_FPrint(frame Frame, parameters []Node) *CallResult {
 
-	printNode(frame.workspace(), parameters[0], true)
+	for _, p := range parameters {
+		printNode(frame.workspace(), p, true)
+	}
 	frame.workspace().print("\n")
 	return nil
 }
 
 func _bi_Type(frame Frame, parameters []Node) *CallResult {
 
-	printNode(frame.workspace(), parameters[0], false)
-	return nil
-}
-
-func _bi_FType(frame Frame, parameters []Node) *CallResult {
-
-	printNode(frame.workspace(), parameters[0], true)
+	for _, p := range parameters {
+		printNode(frame.workspace(), p, false)
+	}
 	return nil
 }
 
@@ -145,12 +145,20 @@ func _bi_IfElse(frame Frame, parameters []Node) *CallResult {
 
 func _bi_Sum(frame Frame, parameters []Node) *CallResult {
 
-	x, y, err := evalNumericParams(parameters[0], parameters[1])
+	n1, err := evalToNumber(parameters[0])
 	if err != nil {
 		return errorResult(err)
 	}
 
-	return returnResult(createNumericNode(x + y))
+	for ix := 1; ix < len(parameters); ix++ {
+		n2, err := evalToNumber(parameters[ix])
+		if err != nil {
+			return errorResult(err)
+		}
+		n1 += n2
+	}
+
+	return returnResult(createNumericNode(n1))
 }
 
 func _bi_Difference(frame Frame, parameters []Node) *CallResult {
@@ -170,12 +178,20 @@ func _bi_Difference(frame Frame, parameters []Node) *CallResult {
 
 func _bi_Product(frame Frame, parameters []Node) *CallResult {
 
-	x, y, err := evalNumericParams(parameters[0], parameters[1])
+	n1, err := evalToNumber(parameters[0])
 	if err != nil {
 		return errorResult(err)
 	}
 
-	return returnResult(createNumericNode(x * y))
+	for ix := 1; ix < len(parameters); ix++ {
+		n2, err := evalToNumber(parameters[ix])
+		if err != nil {
+			return errorResult(err)
+		}
+		n1 *= n2
+	}
+
+	return returnResult(createNumericNode(n1))
 }
 
 func _bi_Quotient(frame Frame, parameters []Node) *CallResult {
@@ -1449,10 +1465,9 @@ func registerBuiltInProcedures(workspace *Workspace) {
 	workspace.registerBuiltIn("OUTPUT", "OP", 1, _bi_Output)
 	workspace.registerBuiltIn("STOP", "", 0, _bi_Stop)
 
-	workspace.registerBuiltIn("PRINT", "PR", 1, _bi_Print)
-	workspace.registerBuiltIn("FPRINT", "FP", 1, _bi_FPrint)
-	workspace.registerBuiltIn("TYPE", "TY", 1, _bi_Type)
-	workspace.registerBuiltIn("FTYPE", "FTY", 1, _bi_FType)
+	workspace.registerBuiltInWithVarParams("PRINT", "PR", 1, _bi_Print)
+	workspace.registerBuiltInWithVarParams("SHOW", "", 1, _bi_FPrint)
+	workspace.registerBuiltInWithVarParams("TYPE", "TY", 1, _bi_Type)
 
 	workspace.registerBuiltIn("READLIST", "RL", 0, _bi_ReadList)
 	workspace.registerBuiltIn("REQUEST", "", 0, _bi_Request)
@@ -1461,13 +1476,13 @@ func registerBuiltInProcedures(workspace *Workspace) {
 	workspace.registerBuiltIn("IF", "", 2, _bi_If)
 	workspace.registerBuiltIn("IFELSE", "", 3, _bi_IfElse)
 
-	workspace.registerBuiltIn("SUM", "", 2, _bi_Sum)
+	workspace.registerBuiltInWithVarParams("SUM", "", 2, _bi_Sum)
 	workspace.registerBuiltIn("DIFFERENCE", "DIFF", 2, _bi_Difference)
-	workspace.registerBuiltIn("PRODUCT", "", 2, _bi_Product)
+	workspace.registerBuiltInWithVarParams("PRODUCT", "", 2, _bi_Product)
 	workspace.registerBuiltIn("QUOTIENT", "", 2, _bi_Quotient)
 	workspace.registerBuiltIn("REMAINDER", "MOD", 2, _bi_Remainder)
-	workspace.registerBuiltIn("MAXIMUM", "MAX", 2, _bi_Maximum)
-	workspace.registerBuiltIn("MINIMUM", "MIN", 2, _bi_Minimum)
+	workspace.registerBuiltInWithVarParams("MAXIMUM", "MAX", 2, _bi_Maximum)
+	workspace.registerBuiltInWithVarParams("MINIMUM", "MIN", 2, _bi_Minimum)
 
 	workspace.registerBuiltIn("EQUALP", "EQUAL?", 2, _bi_Equalp)
 	workspace.registerBuiltIn("IS", "EQUAL?", 2, _bi_Is)
@@ -1488,22 +1503,22 @@ func registerBuiltInProcedures(workspace *Workspace) {
 	workspace.registerBuiltIn("ARCTAN", "", 1, _bi_Arctan)
 
 	workspace.registerBuiltIn("TEST", "", 1, _bi_Test)
-	workspace.registerBuiltIn("IFTRUE", "", 1, _bi_IfTrue)
-	workspace.registerBuiltIn("IFFALSE", "", 1, _bi_IfFalse)
+	workspace.registerBuiltIn("IFTRUE", "IFT", 1, _bi_IfTrue)
+	workspace.registerBuiltIn("IFFALSE", "IFF", 1, _bi_IfFalse)
 
 	workspace.registerBuiltIn("MAKE", "", 2, _bi_Make)
 	workspace.registerBuiltIn("THING", "", 1, _bi_Thing)
 	workspace.registerBuiltIn("LOCAL", "", 1, _bi_Local)
 
-	workspace.registerBuiltIn("WORD", "", 2, _bi_Word)
-	workspace.registerBuiltIn("SENTENCE", "SE", 2, _bi_Sentence)
-	workspace.registerBuiltIn("LIST", "", 2, _bi_List)
+	workspace.registerBuiltInWithVarParams("WORD", "", 2, _bi_Word)
+	workspace.registerBuiltInWithVarParams("SENTENCE", "SE", 2, _bi_Sentence)
+	workspace.registerBuiltInWithVarParams("LIST", "", 2, _bi_List)
 	workspace.registerBuiltIn("FPUT", "", 2, _bi_FPut)
 	workspace.registerBuiltIn("LPUT", "", 2, _bi_LPut)
 	workspace.registerBuiltIn("FIRST", "", 1, _bi_First)
 	workspace.registerBuiltIn("LAST", "", 1, _bi_Last)
-	workspace.registerBuiltIn("BUTFIRST", "", 1, _bi_ButFirst)
-	workspace.registerBuiltIn("BUTLAST", "", 1, _bi_ButLast)
+	workspace.registerBuiltIn("BUTFIRST", "BF", 1, _bi_ButFirst)
+	workspace.registerBuiltIn("BUTLAST", "BL", 1, _bi_ButLast)
 
 	workspace.registerBuiltIn("COUNT", "", 1, _bi_Count)
 	workspace.registerBuiltIn("EMPTYP", "", 1, _bi_Emptyp)
@@ -1512,9 +1527,9 @@ func registerBuiltInProcedures(workspace *Workspace) {
 	workspace.registerBuiltIn("MEMBERP", "", 2, _bi_Memberp)
 	workspace.registerBuiltIn("ITEM", "NTH", 2, _bi_Item)
 
-	workspace.registerBuiltIn("BOTH", "AND", 2, _bi_Both)
-	workspace.registerBuiltIn("EITHER", "OR", 2, _bi_Either)
-	workspace.registerBuiltIn("NOT", "", 1, _bi_Not)
+	workspace.registerBuiltInWithVarParams("AND", "", 2, _bi_Both)
+	workspace.registerBuiltInWithVarParams("OR", "", 2, _bi_Either)
+	workspace.registerBuiltInWithVarParams("NOT", "", 1, _bi_Not)
 
 	workspace.registerBuiltIn("TRACE", "", 0, _bi_Trace)
 	workspace.registerBuiltIn("UNTRACE", "", 0, _bi_Untrace)
@@ -1552,7 +1567,7 @@ func registerBuiltInProcedures(workspace *Workspace) {
 	workspace.registerBuiltIn("PREFIX", "", 0, _bi_Prefix)
 	workspace.registerBuiltIn("SETPREFIX", "", 1, _bi_SetPrefix)
 	workspace.registerBuiltIn("CREATEDIR", "", 1, _bi_CreateDir)
-	workspace.registerBuiltIn("ERASEFILE", "", 1, _bi_EraseFile)
+	workspace.registerBuiltIn("ERASEFILE", "ERF", 1, _bi_EraseFile)
 	workspace.registerBuiltIn("FILEP", "", 1, _bi_Filep)
 	workspace.registerBuiltIn("RENAME", "", 2, _bi_Rename)
 	workspace.registerBuiltIn("POFILE", "", 1, _bi_Pofile)
