@@ -513,34 +513,22 @@ func _bi_Word(frame Frame, parameters []Node) *CallResult {
 func _bi_Sentence(frame Frame, parameters []Node) *CallResult {
 
 	var fn Node
+	var ln Node
+	var c Node
+	for _, n := range parameters {
 
-	switch l := parameters[0].(type) {
-	case *WordNode:
-		fn = l.clone()
-	case *ListNode:
-		fn = (l.clone()).(*ListNode).firstChild
-	}
-
-	nn := fn
-	if nn == nil {
-		switch r := parameters[1].(type) {
+		switch nn := n.(type) {
 		case *WordNode:
-			fn = r.clone()
+			c = nn.clone()
 		case *ListNode:
-			fn = (r.clone()).(*ListNode).firstChild
+			c = (nn.clone()).(*ListNode).firstChild
 		}
-
-	} else {
-		for nn.next() != nil {
-			nn = nn.next()
+		if fn == nil {
+			fn = c
+		} else {
+			ln.addNode(c)
 		}
-
-		switch r := parameters[1].(type) {
-		case *WordNode:
-			nn.addNode(r.clone())
-		case *ListNode:
-			nn.addNode((r.clone()).(*ListNode).firstChild)
-		}
+		ln = c
 	}
 
 	return returnResult(newListNode(-1, -1, fn))
@@ -804,21 +792,14 @@ func _bi_Goodbye(frame Frame, parameters []Node) *CallResult {
 
 func _bi_Both(frame Frame, parameters []Node) *CallResult {
 
-	x, err := evalToBoolean(parameters[0])
-	if err != nil {
-		return errorResult(err)
-	}
-	if !x {
-		return returnResult(falseNode)
-	}
-
-	y, err := evalToBoolean(parameters[1])
-	if err != nil {
-		return errorResult(err)
-	}
-
-	if !y {
-		return returnResult(falseNode)
+	for _, v := range parameters {
+		x, err := evalToBoolean(v)
+		if err != nil {
+			return errorResult(err)
+		}
+		if !x {
+			return returnResult(falseNode)
+		}
 	}
 
 	return returnResult(trueNode)
@@ -826,21 +807,14 @@ func _bi_Both(frame Frame, parameters []Node) *CallResult {
 
 func _bi_Either(frame Frame, parameters []Node) *CallResult {
 
-	x, err := evalToBoolean(parameters[0])
-	if err != nil {
-		return errorResult(err)
-	}
-	if x {
-		return returnResult(trueNode)
-	}
-
-	y, err := evalToBoolean(parameters[1])
-	if err != nil {
-		return errorResult(err)
-	}
-
-	if y {
-		return returnResult(trueNode)
+	for _, v := range parameters {
+		x, err := evalToBoolean(v)
+		if err != nil {
+			return errorResult(err)
+		}
+		if x {
+			return returnResult(trueNode)
+		}
 	}
 
 	return returnResult(falseNode)

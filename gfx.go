@@ -104,6 +104,9 @@ type Surface interface {
 	DrawSurface(x, y int, sfc Surface)
 	DrawLine(x1, y1, x2, y2 int)
 	DrawPoint(x, y int)
+	ErasePoint(x, y int)
+	ReversePoint(x, y int)
+	ColorAt(x, y int) color.Color
 	Fill(x1, y1, x2, y2 int)
 	FillTriangle(x1, y1, x2, y2, x3, y3 int)
 	Update()
@@ -319,6 +322,22 @@ func (this *sdlSurface) DrawPoint(x, y int) {
 	gfx.PixelColor(this.s, int16(x), int16(y), toSdlColor(this.s.Format, this.c))
 }
 
+func (this *sdlSurface) ErasePoint(x, y int) {
+	gfx.PixelColor(this.s, int16(x), int16(y), 0x000000FF)
+}
+
+func (this *sdlSurface) ReversePoint(x, y int) {
+	if x < 0 || x >= this.w || y < 0 || y >= this.h {
+		return
+	}
+	r1, g1, b1, _ := this.s.At(x, y).RGBA()
+	r2, g2, b2, a := this.c.RGBA()
+
+	c := color.RGBA{uint8(r1 ^ r2), uint8(g1 ^ g2), uint8(b1 ^ b2), uint8(a)}
+
+	gfx.PixelColor(this.s, int16(x), int16(y), toSdlColor(this.s.Format, c))
+}
+
 func (this *sdlSurface) Update() {
 	this.s.UpdateRect(0, 0, uint32(this.w), uint32(this.h))
 }
@@ -331,4 +350,11 @@ func (this *sdlSurface) Fill(x1, y1, x2, y2 int) {
 
 func (this *sdlSurface) FillTriangle(x1, y1, x2, y2, x3, y3 int) {
 	gfx.FilledTrigonColor(this.s, int16(x1), int16(y1), int16(x2), int16(y2), int16(x3), int16(y3), toSdlColor(this.s.Format, this.c))
+}
+
+func (this *sdlSurface) ColorAt(x, y int) color.Color {
+	if x < 0 || x >= this.w || y < 0 || y >= this.h {
+		return color.RGBA{}
+	}
+	return this.s.At(x, y)
 }
