@@ -33,7 +33,27 @@ func initScreen(workspace *Workspace, w, h int) *Screen {
 }
 
 func (this *Screen) Open() {
+	this.setScreenMode(screenModeSplit)
 	go this.Update()
+}
+
+func (this *Screen) setScreenMode(screenMode int) {
+	this.screenMode = screenMode
+	switch this.screenMode {
+	case screenModeSplit:
+		this.Invalidate(MT_UpdateGfx)
+		this.Invalidate(MT_UpdateText)
+		h := this.screen.H() - (this.ws.glyphMap.charHeight * splitScreenSize)
+		this.channel.Publish(newVisibleAreaChangeMessage(this.screen.W(), h))
+
+	case screenModeGraphic:
+
+		this.Invalidate(MT_UpdateGfx)
+		this.channel.Publish(newVisibleAreaChangeMessage(this.screen.W(), this.screen.H()))
+	case screenModeText:
+
+		this.Invalidate(MT_UpdateText)
+	}
 }
 
 func (this *Screen) Update() {
@@ -47,11 +67,9 @@ func (this *Screen) Update() {
 			{
 				switch m.MessageType() {
 				case MT_EditStart:
-					this.screenMode = screenModeEdit
+					this.setScreenMode(screenModeEdit)
 				case MT_EditStop:
-					this.screenMode = screenModeSplit
-					this.Invalidate(MT_UpdateGfx)
-					this.Invalidate(MT_UpdateText)
+					this.setScreenMode(screenModeSplit)
 				}
 
 			}
@@ -59,15 +77,11 @@ func (this *Screen) Update() {
 			if this.screenMode != screenModeEdit {
 				switch rm.Sym {
 				case K_F1:
-					this.screenMode = screenModeSplit
-					this.Invalidate(MT_UpdateGfx)
-					this.Invalidate(MT_UpdateText)
+					this.setScreenMode(screenModeSplit)
 				case K_F2:
-					this.screenMode = screenModeGraphic
-					this.Invalidate(MT_UpdateGfx)
+					this.setScreenMode(screenModeGraphic)
 				case K_F3:
-					this.screenMode = screenModeText
-					this.Invalidate(MT_UpdateText)
+					this.setScreenMode(screenModeText)
 				}
 			}
 		case *RegionMessage:
@@ -249,6 +263,15 @@ type RegionMessage struct {
 
 func newRegionMessage(messageType int, surface Surface, regions []*Region) *RegionMessage {
 	return &RegionMessage{MessageBase{messageType}, surface, regions}
+}
+
+type VisibleAreaChangeMessage struct {
+	MessageBase
+	w, h int
+}
+
+func newVisibleAreaChangeMessage(w, h int) *VisibleAreaChangeMessage {
+	return &VisibleAreaChangeMessage{MessageBase{MT_VisibleAreaChange}, w, h}
 }
 
 func _s_Fullscreen(frame Frame, parameters []Node) *CallResult {

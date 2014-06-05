@@ -1,6 +1,7 @@
 package main
 
 import (
+	"fmt"
 	"image/color"
 	"unicode"
 )
@@ -63,6 +64,10 @@ func initConsole(workspace *Workspace, w, h int) *ConsoleScreen {
 	cs.sfcs[1].Fill(0, 0, w, h)
 
 	workspace.registerBuiltIn("CLEARTEXT", "CT", 0, _c_ClearText)
+	workspace.registerBuiltIn("CURSOR", "", 0, _c_Cursor)
+	workspace.registerBuiltIn("SETCURSOR", "", 1, _c_SetCursor)
+	workspace.registerBuiltIn("WIDTH", "", 0, _c_Width)
+	workspace.registerBuiltIn("HEIGHT", "", 1, _c_Height)
 
 	return cs
 }
@@ -278,4 +283,53 @@ func _c_ClearText(frame Frame, parameters []Node) *CallResult {
 	frame.workspace().console.Clear()
 
 	return nil
+}
+
+func _c_Cursor(frame Frame, parameters []Node) *CallResult {
+
+	c := frame.workspace().console
+
+	x := newWordNode(-1, -1, fmt.Sprint(c.cx), true)
+	y := newWordNode(-1, -1, fmt.Sprint(c.cy), true)
+	x.addNode(y)
+	return returnResult(newListNode(-1, -1, x))
+}
+
+func _c_SetCursor(frame Frame, parameters []Node) *CallResult {
+	fx, fy, err := parseCoords(parameters[0])
+	if err != nil {
+		return errorResult(err)
+	}
+	x := int(fx)
+	y := int(fy)
+
+	c := frame.workspace().console
+	gm := c.ws.glyphMap
+	mx := c.sfcs[0].W() / gm.charWidth
+	my := c.sfcs[0].H() / gm.charHeight
+	if x < 0 || x > mx || y < 0 || y > my {
+		ln, _ := parameters[0].(*ListNode)
+		return errorResult(errorInvalidPosition(ln))
+	}
+
+	c.cx = x
+	c.cy = y
+
+	return nil
+}
+
+func _c_Width(frame Frame, parameters []Node) *CallResult {
+	c := frame.workspace().console
+	gm := c.ws.glyphMap
+	mx := c.sfcs[0].W() / gm.charWidth
+
+	return returnResult(newWordNode(-1, -1, fmt.Sprint(mx), true))
+}
+
+func _c_Height(frame Frame, parameters []Node) *CallResult {
+	c := frame.workspace().console
+	gm := c.ws.glyphMap
+	my := c.sfcs[0].H() / gm.charHeight
+
+	return returnResult(newWordNode(-1, -1, fmt.Sprint(my), true))
 }

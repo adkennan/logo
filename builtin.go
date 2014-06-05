@@ -1,6 +1,8 @@
 package main
 
 import (
+	"bufio"
+	"fmt"
 	"io"
 	"math"
 	"math/rand"
@@ -575,6 +577,28 @@ func _bi_LPut(frame Frame, parameters []Node) *CallResult {
 		return returnResult(rc)
 	}
 	return errorResult(errorListExpected(parameters[1]))
+}
+
+func _bi_Parse(frame Frame, parameters []Node) *CallResult {
+
+	val, err := evalToWord(parameters[0])
+	if err != nil {
+		return errorResult(err)
+	}
+
+	r := strings.NewReader(val + string(listEnd))
+	rr := bufio.NewReader(r)
+	l := 0
+	c := 0
+	fn, err := readUntil(rr, &l, &c, listEnd)
+	if err != nil {
+		return errorResult(err)
+	}
+
+	ln := newListNode(-1, -1, fn)
+	ln.setLiteral()
+
+	return returnResult(ln)
 }
 
 func _bi_First(frame Frame, parameters []Node) *CallResult {
@@ -1434,6 +1458,24 @@ func _bi_Pofile(frame Frame, parameters []Node) *CallResult {
 	return nil
 }
 
+func _bi_Ascii(frame Frame, parameters []Node) *CallResult {
+
+	v, err := evalToWord(parameters[0])
+	if err != nil {
+		return errorResult(err)
+	}
+
+	if len(v) == 0 {
+		return errorResult(errorAtLeastOneCharExpected(parameters[0]))
+	}
+
+	b := v[0]
+	if b < 128 {
+		return returnResult(newWordNode(-1, -1, fmt.Sprint(b), true))
+	}
+	return returnResult(newWordNode(-1, -1, "-1", true))
+}
+
 func registerBuiltInProcedures(workspace *Workspace) {
 
 	workspace.registerBuiltIn("OUTPUT", "OP", 1, _bi_Output)
@@ -1493,6 +1535,8 @@ func registerBuiltInProcedures(workspace *Workspace) {
 	workspace.registerBuiltIn("LAST", "", 1, _bi_Last)
 	workspace.registerBuiltIn("BUTFIRST", "BF", 1, _bi_ButFirst)
 	workspace.registerBuiltIn("BUTLAST", "BL", 1, _bi_ButLast)
+	workspace.registerBuiltIn("PARSE", "", 1, _bi_Parse)
+	workspace.registerBuiltIn("ASCII", "", 1, _bi_Ascii)
 
 	workspace.registerBuiltIn("COUNT", "", 1, _bi_Count)
 	workspace.registerBuiltIn("EMPTYP", "", 1, _bi_Emptyp)

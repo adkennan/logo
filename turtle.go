@@ -79,10 +79,12 @@ type Turtle struct {
 	ws          *Workspace
 	sprite      Surface
 	image       Surface
-	broker      *MessageBroker
+	channel     *Channel
 	dirtyGrid   []bool
 	gridSweep   int
 	mutex       *sync.Mutex
+	visW        int
+	visH        int
 }
 
 func (this *Turtle) normX(x int) int {
@@ -109,12 +111,10 @@ func (this *Turtle) clear() {
 }
 
 func (this *Turtle) invalidate() {
-	this.addDirtyRegion(0, 0, this.image.W(), this.image.H())
+	this.addDirtyRegion(0, 0, this.visW, this.visH)
 }
 
 func (this *Turtle) addDirtyRegion(x1, y1, x2, y2 int) {
-
-	//println("(", x1, ", ", y1, ") -> (", x2, ", ", y2, ")")
 
 	gridHeight := len(this.dirtyGrid) / this.gridSweep
 	bx1 := intMax(0, intMin(x1, x2)/gridSize)
@@ -137,7 +137,7 @@ func (this *Turtle) tick() {
 	for {
 		this.mutex.Lock()
 
-		gridHeight := this.image.H() / gridSize
+		gridHeight := this.visH / gridSize
 		regions := make([]*Region, 0, 1)
 		for y := 0; y < gridHeight; y++ {
 			l := this.dirtyGrid[y*this.gridSweep : (y+1)*this.gridSweep]
@@ -163,7 +163,7 @@ func (this *Turtle) tick() {
 			for _, r := range regions {
 				r.Multiply(gridSize)
 			}
-			this.broker.Publish(newRegionMessage(MT_UpdateGfx, this.image, regions))
+			this.channel.Publish(newRegionMessage(MT_UpdateGfx, this.image, regions))
 		}
 
 		this.mutex.Unlock()
@@ -171,11 +171,21 @@ func (this *Turtle) tick() {
 	}
 }
 
+func (this *Turtle) listen() {
+	for m := this.channel.Wait(); m != nil; m = this.channel.Wait() {
+		switch rm := m.(type) {
+		case *VisibleAreaChangeMessage:
+			this.visW = rm.w
+			this.visH = rm.h
+		}
+	}
+}
+
 func (this *Turtle) offScreen() bool {
 	x := this.normX(int(this.x))
 	y := this.normY(int(this.y))
 
-	return x < 0 || x >= this.image.W() || y < 0 || y >= this.image.H()
+	return x < 0 || x >= this.visW || y < 0 || y >= this.visH
 }
 
 func (this *Turtle) drawLine(x1, y1, x2, y2 int) (int, int) {
@@ -201,8 +211,8 @@ func (this *Turtle) drawLine(x1, y1, x2, y2 int) (int, int) {
 	err := dx - dy
 
 	r := this.image
-	w := r.W()
-	h := r.H()
+	w := this.visW
+	h := this.visH
 	r.SetColor(this.penColor)
 	for {
 		switch this.penState {
@@ -228,8 +238,6 @@ func (this *Turtle) drawLine(x1, y1, x2, y2 int) (int, int) {
 				case borderModeWrap:
 
 					this.addDirtyRegion(rx1, ry1, x1, y1)
-					rx1 = x1
-					ry1 = y1
 
 					tx := x1 - x2
 
@@ -239,6 +247,8 @@ func (this *Turtle) drawLine(x1, y1, x2, y2 int) (int, int) {
 						x1 = 0
 					}
 					x2 = x1 - tx
+					rx1 = x1
+					ry1 = y1
 				default:
 					break
 				}
@@ -257,8 +267,6 @@ func (this *Turtle) drawLine(x1, y1, x2, y2 int) (int, int) {
 				case borderModeWrap:
 
 					this.addDirtyRegion(rx1, ry1, x1, y1)
-					rx1 = x1
-					ry1 = y1
 
 					ty := y1 - y2
 
@@ -268,6 +276,8 @@ func (this *Turtle) drawLine(x1, y1, x2, y2 int) (int, int) {
 						y1 = 0
 					}
 					y2 = y1 - ty
+					rx1 = x1
+					ry1 = y1
 				default:
 					break
 				}
@@ -283,7 +293,7 @@ done:
 		this.addDirtyRegion(x2, y2, x2, y2)
 	}
 
-	return this.denormX(x2), this.denormY(y2)
+	return this.denormX(x1), this.denormY(y1)
 }
 
 func (this *Turtle) updateSprite() {
@@ -318,11 +328,11 @@ func (this *Turtle) refreshTurtle() {
 func initTurtle(ws *Workspace) *Turtle {
 	turtle := &Turtle{
 		0, 0, 0, 1.0, turtleStateShown, penStateDown, borderModeWindow,
-		colorWhite, colorBlack, colorWhite, ws, nil, nil, nil, nil, 0, &sync.Mutex{}}
+		colorWhite, colorBlack, colorWhite, ws, nil, nil, nil, nil, 0, &sync.Mutex{}, 0, 0}
 
 	turtle.sprite = ws.screen.screen.CreateSurface(turtleSize*2, turtleSize*2)
 	turtle.image = ws.screen.screen.CreateSurface(ws.screen.screen.W(), ws.screen.screen.H())
-	turtle.broker = ws.broker
+	turtle.channel = ws.broker.Subscribe(MT_VisibleAreaChange)
 	turtle.gridSweep = turtle.image.W() / 32
 	turtle.dirtyGrid = make([]bool, turtle.gridSweep*(turtle.image.H()/32))
 	turtle.updateSprite()
@@ -365,6 +375,8 @@ func initTurtle(ws *Workspace) *Turtle {
 	ws.registerBuiltIn("WINDOW", "", 0, _t_Window)
 	ws.registerBuiltIn("WRAP", "", 0, _t_Wrap)
 	ws.registerBuiltIn("FENCE", "", 0, _t_Fence)
+
+	go turtle.listen()
 	go turtle.tick()
 
 	return turtle

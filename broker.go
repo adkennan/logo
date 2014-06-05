@@ -8,6 +8,7 @@ const (
 	MT_EditStart
 	MT_EditStop
 	MT_Quit
+	MT_VisibleAreaChange
 )
 
 type Message interface {

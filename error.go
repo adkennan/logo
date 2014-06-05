@@ -103,3 +103,11 @@ func errorNoInterpretedFrame(node *WordNode) error {
 func errorUserStopped(node Node) error {
 	return toError(22, node, "Stopped.")
 }
+
+func errorInvalidPosition(node *ListNode) error {
+	return toError(23, node, "Position "+node.String()+" is invalid.")
+}
+
+func errorAtLeastOneCharExpected(node Node) error {
+	return toError(24, node, "At least one character expected.")
+}
