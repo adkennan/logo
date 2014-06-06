@@ -8,6 +8,7 @@ import (
 	"math/rand"
 	"strings"
 	"time"
+	"unicode/utf8"
 )
 
 var keywordTo string = "TO"
@@ -204,9 +205,60 @@ func _bi_Quotient(frame Frame, parameters []Node) *CallResult {
 	}
 
 	if frame.caller().isInfix {
+		if x == 0 {
+			return errorResult(errorAttemptToDivideByZero(parameters[0]))
+		}
 		return returnResult(createNumericNode(y / x))
 	}
+
+	if y == 0 {
+		return errorResult(errorAttemptToDivideByZero(parameters[1]))
+	}
 	return returnResult(createNumericNode(x / y))
+}
+
+func _bi_IntQuotient(frame Frame, parameters []Node) *CallResult {
+
+	x, y, err := evalNumericParams(parameters[0], parameters[1])
+	if err != nil {
+		return errorResult(err)
+	}
+
+	if y == 0 {
+		return errorResult(errorAttemptToDivideByZero(parameters[1]))
+	}
+	return returnResult(createNumericNode(float64(int64(x) / int64(y))))
+}
+
+func _bi_Int(frame Frame, parameters []Node) *CallResult {
+
+	n, err := evalToNumber(parameters[0])
+	if err != nil {
+		return errorResult(err)
+	}
+
+	return returnResult(createNumericNode(float64(int64(n))))
+}
+
+func _bi_Form(frame Frame, parameters []Node) *CallResult {
+
+	n, err := evalToNumber(parameters[0])
+	if err != nil {
+		return errorResult(err)
+	}
+
+	f, err := evalToNumber(parameters[1])
+	if err != nil {
+		return errorResult(err)
+	}
+
+	p, err := evalToNumber(parameters[2])
+	if err != nil {
+		return errorResult(err)
+	}
+
+	fs := fmt.Sprintf("%%%d.%df", int64(f), int64(p))
+	return returnResult(newWordNode(-1, -1, fmt.Sprintf(fs, n), true))
 }
 
 func _bi_Remainder(frame Frame, parameters []Node) *CallResult {
@@ -214,6 +266,10 @@ func _bi_Remainder(frame Frame, parameters []Node) *CallResult {
 	x, y, err := evalNumericParams(parameters[0], parameters[1])
 	if err != nil {
 		return errorResult(err)
+	}
+
+	if y == 0 {
+		return errorResult(errorAttemptToDivideByZero(parameters[1]))
 	}
 
 	return returnResult(createNumericNode(float64(int64(x) % int64(y))))
@@ -471,6 +527,32 @@ func _bi_Make(frame Frame, parameters []Node) *CallResult {
 	return nil
 }
 
+func _bi_Name(frame Frame, parameters []Node) *CallResult {
+
+	name, err := evalToWord(parameters[1])
+	if err != nil {
+		return errorResult(err)
+	}
+
+	frame.parentFrame().setVariable(name, parameters[0])
+	return nil
+}
+
+func _bi_Namep(frame Frame, parameters []Node) *CallResult {
+
+	name, err := evalToWord(parameters[0])
+	if err != nil {
+		return errorResult(err)
+	}
+
+	val := frame.parentFrame().getVariable(name)
+	if val == nil {
+		return returnResult(falseNode)
+	}
+
+	return returnResult(trueNode)
+}
+
 func _bi_Thing(frame Frame, parameters []Node) *CallResult {
 
 	name, err := evalToWord(parameters[0])
@@ -488,12 +570,13 @@ func _bi_Thing(frame Frame, parameters []Node) *CallResult {
 
 func _bi_Local(frame Frame, parameters []Node) *CallResult {
 
-	name, err := evalToWord(parameters[0])
+	names, err := toWordList(parameters[0])
 	if err != nil {
 		return errorResult(err)
 	}
-
-	frame.parentFrame().createLocal(name)
+	for _, name := range names {
+		frame.parentFrame().createLocal(name.value)
+	}
 	return nil
 }
 
@@ -720,6 +803,15 @@ func _bi_Wordp(frame Frame, parameters []Node) *CallResult {
 
 	switch parameters[0].(type) {
 	case *WordNode:
+		return returnResult(trueNode)
+	}
+	return returnResult(falseNode)
+}
+
+func _bi_Listp(frame Frame, parameters []Node) *CallResult {
+
+	switch parameters[0].(type) {
+	case *ListNode:
 		return returnResult(trueNode)
 	}
 	return returnResult(falseNode)
@@ -1476,6 +1568,56 @@ func _bi_Ascii(frame Frame, parameters []Node) *CallResult {
 	return returnResult(newWordNode(-1, -1, "-1", true))
 }
 
+func _bi_Unicode(frame Frame, parameters []Node) *CallResult {
+
+	v, err := evalToWord(parameters[0])
+	if err != nil {
+		return errorResult(err)
+	}
+
+	if len(v) == 0 {
+		return errorResult(errorAtLeastOneCharExpected(parameters[0]))
+	}
+
+	r, _ := utf8.DecodeRuneInString(v)
+	if r == utf8.RuneError {
+		return errorResult(errorAtLeastOneCharExpected(parameters[0]))
+	}
+
+	return returnResult(newWordNode(-1, -1, fmt.Sprint(r), true))
+}
+
+func _bi_Char(frame Frame, parameters []Node) *CallResult {
+
+	n, err := evalToNumber(parameters[0])
+	if err != nil {
+		return errorResult(err)
+	}
+
+	r := rune(n)
+	return returnResult(newWordNode(-1, -1, string(r), true))
+}
+
+func _bi_Uppercase(frame Frame, parameters []Node) *CallResult {
+
+	v, err := evalToWord(parameters[0])
+	if err != nil {
+		return errorResult(err)
+	}
+
+	return returnResult(newWordNode(-1, -1, strings.ToUpper(v), true))
+}
+
+func _bi_Lowercase(frame Frame, parameters []Node) *CallResult {
+
+	v, err := evalToWord(parameters[0])
+	if err != nil {
+		return errorResult(err)
+	}
+
+	return returnResult(newWordNode(-1, -1, strings.ToLower(v), true))
+}
+
 func registerBuiltInProcedures(workspace *Workspace) {
 
 	workspace.registerBuiltIn("OUTPUT", "OP", 1, _bi_Output)
@@ -1496,6 +1638,9 @@ func registerBuiltInProcedures(workspace *Workspace) {
 	workspace.registerBuiltIn("DIFFERENCE", "DIFF", 2, _bi_Difference)
 	workspace.registerBuiltInWithVarParams("PRODUCT", "", 2, _bi_Product)
 	workspace.registerBuiltIn("QUOTIENT", "", 2, _bi_Quotient)
+	workspace.registerBuiltIn("INTQUOTIENT", "", 2, _bi_IntQuotient)
+	workspace.registerBuiltIn("INT", "", 1, _bi_Int)
+	workspace.registerBuiltIn("FORM", "", 3, _bi_Form)
 	workspace.registerBuiltIn("REMAINDER", "MOD", 2, _bi_Remainder)
 	workspace.registerBuiltInWithVarParams("MAXIMUM", "MAX", 2, _bi_Maximum)
 	workspace.registerBuiltInWithVarParams("MINIMUM", "MIN", 2, _bi_Minimum)
@@ -1523,6 +1668,8 @@ func registerBuiltInProcedures(workspace *Workspace) {
 	workspace.registerBuiltIn("IFFALSE", "IFF", 1, _bi_IfFalse)
 
 	workspace.registerBuiltIn("MAKE", "", 2, _bi_Make)
+	workspace.registerBuiltIn("NAME", "", 2, _bi_Name)
+	workspace.registerBuiltIn("NAMEP", "", 1, _bi_Namep)
 	workspace.registerBuiltIn("THING", "", 1, _bi_Thing)
 	workspace.registerBuiltIn("LOCAL", "", 1, _bi_Local)
 
@@ -1537,10 +1684,15 @@ func registerBuiltInProcedures(workspace *Workspace) {
 	workspace.registerBuiltIn("BUTLAST", "BL", 1, _bi_ButLast)
 	workspace.registerBuiltIn("PARSE", "", 1, _bi_Parse)
 	workspace.registerBuiltIn("ASCII", "", 1, _bi_Ascii)
+	workspace.registerBuiltIn("UNICODE", "", 1, _bi_Unicode)
+	workspace.registerBuiltIn("CHAR", "", 1, _bi_Char)
+	workspace.registerBuiltIn("UPPERCASE", "", 1, _bi_Uppercase)
+	workspace.registerBuiltIn("LOWERCASE", "", 1, _bi_Lowercase)
 
 	workspace.registerBuiltIn("COUNT", "", 1, _bi_Count)
 	workspace.registerBuiltIn("EMPTYP", "", 1, _bi_Emptyp)
 	workspace.registerBuiltIn("WORDP", "", 1, _bi_Wordp)
+	workspace.registerBuiltIn("LISTP", "", 1, _bi_Listp)
 	workspace.registerBuiltIn("SENTENCEP", "", 1, _bi_Sentencep)
 	workspace.registerBuiltIn("MEMBERP", "", 2, _bi_Memberp)
 	workspace.registerBuiltIn("ITEM", "NTH", 2, _bi_Item)

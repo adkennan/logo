@@ -111,3 +111,7 @@ func errorInvalidPosition(node *ListNode) error {
 func errorAtLeastOneCharExpected(node Node) error {
 	return toError(24, node, "At least one character expected.")
 }
+
+func errorAttemptToDivideByZero(node Node) error {
+	return toError(25, node, "Attempt to divide by zero.")
+}
