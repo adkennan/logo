@@ -37,6 +37,7 @@ func callProcedure(frame Frame, node Node, withInfix bool) (*CallResult, Node) {
 			return errorResult(errorProcedureExpected(node)), nil
 		}
 		procName = strings.ToUpper(wn.value)
+
 		proc = frame.workspace().findProcedure(procName)
 
 		if proc == nil {
@@ -48,7 +49,7 @@ func callProcedure(frame Frame, node Node, withInfix bool) (*CallResult, Node) {
 			if proc.allowVarParameters() && wn.isFirstOfGroup {
 				paramCount = -1
 			}
-			parameters, node, err = fetchParameters(frame, wn, node.next(), paramCount, withInfix)
+			parameters, node, err = fetchParameters(frame, wn, procName, node.next(), paramCount, withInfix)
 			if err != nil {
 				return errorResult(err), nil
 			}
@@ -56,6 +57,14 @@ func callProcedure(frame Frame, node Node, withInfix bool) (*CallResult, Node) {
 			parameters = make([]Node, 0, 0)
 			node = node.next()
 		}
+	}
+
+	if procName == keywordGo {
+		ln, err := findLabel(frame, node, parameters[0])
+		if err != nil {
+			return errorResult(err), nil
+		}
+		return nil, ln
 	}
 
 	subFrame := proc.createFrame(frame, wn)
@@ -74,7 +83,7 @@ func callProcedure(frame Frame, node Node, withInfix bool) (*CallResult, Node) {
 	return rv, node
 }
 
-func fetchParameters(frame Frame, caller *WordNode, firstNode Node, paramCount int, withInfix bool) ([]Node, Node, error) {
+func fetchParameters(frame Frame, caller *WordNode, procName string, firstNode Node, paramCount int, withInfix bool) ([]Node, Node, error) {
 
 	var params []Node
 	if paramCount > 0 {
@@ -119,6 +128,11 @@ func fetchParameters(frame Frame, caller *WordNode, firstNode Node, paramCount i
 
 	if ix < paramCount {
 		return nil, nil, errorNotEnoughParameters(caller, firstNode)
+	}
+
+	if procName == keywordIf && n != nil && n.nodeType() == List {
+		params = append(params, n)
+		n = n.next()
 	}
 
 	return params, n, nil
@@ -355,4 +369,45 @@ func evalNodeStream(frame Frame, node Node, canReturnValue bool) *CallResult {
 		return returnResult(lastValue)
 	}
 	return nil
+}
+
+func findLabel(frame Frame, node, name Node) (Node, error) {
+
+	intFrame, err := findInterpretedFrame(frame)
+	if err != nil {
+		return nil, err
+	}
+
+	wn, ok := name.(*WordNode)
+	if !ok {
+		return nil, errorWordExpected(node)
+	}
+	uname := strings.ToUpper(wn.value)
+
+	for n := intFrame.procedure.firstNode; n != nil; n = n.next() {
+		wn, ok := n.(*WordNode)
+		if !ok {
+			continue
+		}
+
+		if strings.ToUpper(wn.value) != keywordLabel {
+			continue
+		}
+
+		nn := wn.next()
+		if nn == nil {
+			continue
+		}
+
+		nwn, ok := nn.(*WordNode)
+		if !ok {
+			continue
+		}
+
+		if strings.ToUpper(nwn.value) == uname {
+			return n, nil
+		}
+	}
+
+	return nil, errorLabelNotFound(node, wn.value)
 }

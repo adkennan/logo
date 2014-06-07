@@ -16,12 +16,26 @@ var keywordEnd string = "END"
 var keywordTrue string = "TRUE"
 var keywordFalse string = "FALSE"
 var keywordThing string = "THING"
+var keywordIf string = "IF"
+var keywordGo string = "GO"
+var keywordLabel string = "LABEL"
+var keywordError string = "ERROR"
 
 var trueNode Node = newWordNode(-1, -1, keywordTrue, true)
 var falseNode Node = newWordNode(-1, -1, keywordFalse, true)
 var randomMax Node = newWordNode(-1, -1, "10", true)
 
 var traceEnabled bool
+
+func _bi_Go(frame Frame, parameters []Node) *CallResult {
+	// Dummy - call handled in eval.go
+	return nil
+}
+
+func _bi_Label(frame Frame, parameters []Node) *CallResult {
+	// Dummy - call handled in eval.go
+	return nil
+}
 
 func _bi_Output(frame Frame, parameters []Node) *CallResult {
 
@@ -98,6 +112,10 @@ func _bi_If(frame Frame, parameters []Node) *CallResult {
 		return evalInstructionList(frame, parameters[1], true)
 	}
 
+	if len(parameters) == 3 {
+		return evalInstructionList(frame, parameters[2], true)
+	}
+
 	return nil
 }
 
@@ -130,20 +148,6 @@ func _bi_Request(frame Frame, parameters []Node) *CallResult {
 	}
 	n.setLiteral()
 	return returnResult(n)
-}
-
-func _bi_IfElse(frame Frame, parameters []Node) *CallResult {
-
-	r, err := evalToBoolean(parameters[0])
-	if err != nil {
-		return errorResult(err)
-	}
-
-	if r {
-		return evalInstructionList(frame, parameters[1], true)
-	} else {
-		return evalInstructionList(frame, parameters[2], true)
-	}
 }
 
 func _bi_Sum(frame Frame, parameters []Node) *CallResult {
@@ -238,6 +242,26 @@ func _bi_Int(frame Frame, parameters []Node) *CallResult {
 	}
 
 	return returnResult(createNumericNode(float64(int64(n))))
+}
+
+func _bi_Round(frame Frame, parameters []Node) *CallResult {
+
+	n, prec, err := evalNumericParams(parameters[0], parameters[1])
+	if err != nil {
+		return errorResult(err)
+	}
+
+	var r float64
+	pow := math.Pow(10, float64(prec))
+	i := n * pow
+	_, frac := math.Modf(i)
+	if frac >= 0.5 {
+		r = math.Ceil(i)
+	} else {
+		r = math.Floor(i)
+	}
+
+	return returnResult(createNumericNode(r / pow))
 }
 
 func _bi_Form(frame Frame, parameters []Node) *CallResult {
@@ -1618,10 +1642,43 @@ func _bi_Lowercase(frame Frame, parameters []Node) *CallResult {
 	return returnResult(newWordNode(-1, -1, strings.ToLower(v), true))
 }
 
+func _bi_Throw(frame Frame, parameters []Node) *CallResult {
+
+	v, err := evalToWord(parameters[0])
+	if err != nil {
+		return errorResult(err)
+	}
+
+	return errorResult(userError(v))
+}
+
+func _bi_Catch(frame Frame, parameters []Node) *CallResult {
+
+	v, err := evalToWord(parameters[0])
+	if err != nil {
+		return errorResult(err)
+	}
+
+	rv := evalInstructionList(frame, parameters[1], true)
+	if !rv.hasError() {
+		return rv
+	}
+
+	uExpected := strings.ToUpper(v)
+
+	if uExpected == keywordError || uExpected == strings.ToUpper(rv.err.Error()) {
+		return nil
+	}
+
+	return rv
+}
+
 func registerBuiltInProcedures(workspace *Workspace) {
 
 	workspace.registerBuiltIn("OUTPUT", "OP", 1, _bi_Output)
 	workspace.registerBuiltIn("STOP", "", 0, _bi_Stop)
+	workspace.registerBuiltIn("CATCH", "", 2, _bi_Catch)
+	workspace.registerBuiltIn("THROW", "", 1, _bi_Throw)
 
 	workspace.registerBuiltInWithVarParams("PRINT", "PR", 1, _bi_Print)
 	workspace.registerBuiltInWithVarParams("SHOW", "", 1, _bi_FPrint)
@@ -1631,8 +1688,7 @@ func registerBuiltInProcedures(workspace *Workspace) {
 	workspace.registerBuiltIn("REQUEST", "", 0, _bi_Request)
 
 	workspace.registerBuiltIn("REPEAT", "", 2, _bi_Repeat)
-	workspace.registerBuiltIn("IF", "", 2, _bi_If)
-	workspace.registerBuiltIn("IFELSE", "", 3, _bi_IfElse)
+	workspace.registerBuiltIn(keywordIf, "", 2, _bi_If)
 
 	workspace.registerBuiltInWithVarParams("SUM", "", 2, _bi_Sum)
 	workspace.registerBuiltIn("DIFFERENCE", "DIFF", 2, _bi_Difference)
@@ -1640,6 +1696,7 @@ func registerBuiltInProcedures(workspace *Workspace) {
 	workspace.registerBuiltIn("QUOTIENT", "", 2, _bi_Quotient)
 	workspace.registerBuiltIn("INTQUOTIENT", "", 2, _bi_IntQuotient)
 	workspace.registerBuiltIn("INT", "", 1, _bi_Int)
+	workspace.registerBuiltIn("ROUND", "", 2, _bi_Round)
 	workspace.registerBuiltIn("FORM", "", 3, _bi_Form)
 	workspace.registerBuiltIn("REMAINDER", "MOD", 2, _bi_Remainder)
 	workspace.registerBuiltInWithVarParams("MAXIMUM", "MAX", 2, _bi_Maximum)
@@ -1741,4 +1798,7 @@ func registerBuiltInProcedures(workspace *Workspace) {
 	workspace.registerBuiltIn("FILEP", "", 1, _bi_Filep)
 	workspace.registerBuiltIn("RENAME", "", 2, _bi_Rename)
 	workspace.registerBuiltIn("POFILE", "", 1, _bi_Pofile)
+
+	workspace.registerBuiltIn("GO", "", 1, _bi_Go)
+	workspace.registerBuiltIn("LABEL", "", 1, _bi_Label)
 }

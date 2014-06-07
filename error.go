@@ -15,6 +15,10 @@ func toError(code int, node Node, message string) error {
 	return errors.New(message)
 }
 
+func userError(message string) error {
+	return errors.New(message)
+}
+
 func errorKeywordExpected(node Node, keyword string) error {
 	return toError(1, node, "Keyword "+keyword+" expected.")
 }
@@ -114,4 +118,8 @@ func errorAtLeastOneCharExpected(node Node) error {
 
 func errorAttemptToDivideByZero(node Node) error {
 	return toError(25, node, "Attempt to divide by zero.")
+}
+
+func errorLabelNotFound(node Node, name string) error {
+	return toError(26, node, "Label "+name+" not found.")
 }
