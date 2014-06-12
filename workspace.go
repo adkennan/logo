@@ -34,7 +34,7 @@ func CreateWorkspace(w, h int) *Workspace {
 		panic(err)
 	}
 	ws := &Workspace{nil, make(map[string]Procedure, 100), false, nil, nil, nil, nil, nil, nil, nil, nil}
-	ws.rootFrame = &RootFrame{ws, nil, nil, make(map[string]*Variable, 10)}
+	ws.rootFrame = &RootFrame{ws, nil, nil, newVarList()}
 	ws.currentFrame = ws.rootFrame
 	ws.broker = CreateMessageBroker()
 	ws.files = CreateFiles(path.Join(u.HomeDir, "logo"))

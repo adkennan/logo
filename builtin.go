@@ -547,7 +547,7 @@ func _bi_Make(frame Frame, parameters []Node) *CallResult {
 		return errorResult(err)
 	}
 
-	frame.parentFrame().setVariable(name, parameters[1])
+	frame.getVars().setVariable(frame, name, parameters[1])
 	return nil
 }
 
@@ -558,7 +558,7 @@ func _bi_Name(frame Frame, parameters []Node) *CallResult {
 		return errorResult(err)
 	}
 
-	frame.parentFrame().setVariable(name, parameters[0])
+	frame.getVars().setVariable(frame, name, parameters[0])
 	return nil
 }
 
@@ -569,7 +569,7 @@ func _bi_Namep(frame Frame, parameters []Node) *CallResult {
 		return errorResult(err)
 	}
 
-	val := frame.parentFrame().getVariable(name)
+	val := frame.getVars().getVariable(frame, name)
 	if val == nil {
 		return returnResult(falseNode)
 	}
@@ -584,7 +584,7 @@ func _bi_Thing(frame Frame, parameters []Node) *CallResult {
 		return errorResult(err)
 	}
 
-	val := frame.parentFrame().getVariable(name)
+	val := frame.getVars().getVariable(frame, name)
 	if val == nil {
 		return errorResult(errorVariableNotFound(parameters[0], name))
 	}
@@ -599,8 +599,130 @@ func _bi_Local(frame Frame, parameters []Node) *CallResult {
 		return errorResult(err)
 	}
 	for _, name := range names {
-		frame.parentFrame().createLocal(name.value)
+		frame.parentFrame().getVars().createLocal(name.value)
 	}
+	return nil
+}
+
+func _bi_Erprops(frame Frame, parameters []Node) *CallResult {
+
+	frame.workspace().rootFrame.getVars().clearProps()
+
+	return nil
+}
+
+func _bi_Gprop(frame Frame, parameters []Node) *CallResult {
+
+	vName, err := evalToWord(parameters[0])
+	if err != nil {
+		return errorResult(err)
+	}
+
+	pName, err := evalToWord(parameters[1])
+	if err != nil {
+		return errorResult(err)
+	}
+
+	p := frame.getVars().getProp(frame, vName, strings.ToUpper(pName))
+	if p == nil {
+		return returnResult(newListNode(-1, -1, nil))
+	}
+
+	return returnResult(p)
+}
+
+func _bi_Plist(frame Frame, parameters []Node) *CallResult {
+
+	vName, err := evalToWord(parameters[0])
+	if err != nil {
+		return errorResult(err)
+	}
+
+	vars := frame.getVars()
+
+	v := vars.getVariableInner(frame, vName, strings.ToUpper(vName), false)
+	if v == nil || v.props == nil {
+		return returnResult(newListNode(-1, -1, nil))
+	}
+
+	var fn Node
+	var pn Node
+	var n Node
+	for k, v := range v.props {
+		n = newWordNode(-1, -1, k, true)
+		if fn == nil {
+			fn = n
+		} else {
+			pn.addNode(n)
+		}
+
+		n.addNode(v)
+
+		pn = v
+	}
+
+	return returnResult(newListNode(-1, -1, fn))
+}
+
+func _bi_Pprop(frame Frame, parameters []Node) *CallResult {
+
+	vName, err := evalToWord(parameters[0])
+	if err != nil {
+		return errorResult(err)
+	}
+
+	vars := frame.getVars()
+
+	pName, err := evalToWord(parameters[1])
+	if err != nil {
+		return errorResult(err)
+	}
+
+	vars.setProp(frame, vName, strings.ToUpper(pName), parameters[2])
+
+	return nil
+}
+
+func _bi_Pps(frame Frame, parameters []Node) *CallResult {
+
+	ws := frame.workspace()
+	vs := ws.rootFrame.getVars()
+	if vs.vars == nil {
+		return nil
+	}
+
+	for _, v := range vs.vars {
+		if v.hasProps() {
+			for pName, pVal := range v.props {
+				quote := ""
+				if pVal.nodeType() == Word {
+					quote = "\""
+				}
+				ws.print(fmt.Sprintf("PPROP \"%s \"%s %s%s\n",
+					v.name, pName, quote, pVal.String()))
+			}
+		}
+	}
+
+	return nil
+}
+
+func _bi_Remprop(frame Frame, parameters []Node) *CallResult {
+
+	vName, err := evalToWord(parameters[0])
+	if err != nil {
+		return errorResult(err)
+	}
+
+	vars := frame.getVars()
+
+	pName, err := evalToWord(parameters[1])
+	if err != nil {
+		return errorResult(err)
+	}
+
+	vars.clearProp(frame, vName, pName)
+
 	return nil
 }
 
@@ -1038,7 +1160,7 @@ func _bi_PoAll(frame Frame, parameters []Node) *CallResult {
 
 	_bi_Pops(frame, parameters)
 
-	if len(ws.rootFrame.vars) > 0 {
+	if len(ws.rootFrame.getVars().vars) > 0 {
 		ws.print("\n")
 
 		_bi_Pons(frame, parameters)
@@ -1096,7 +1218,7 @@ func _bi_Pon(frame Frame, parameters []Node) *CallResult {
 	ws := frame.workspace()
 	for _, n := range names {
 		name := strings.ToUpper(n.value)
-		v, exists := ws.rootFrame.vars[name]
+		v, exists := ws.rootFrame.getVars().vars[name]
 		if exists && !v.buried {
 			printVariable(ws, name, v.value)
 		}
@@ -1109,7 +1231,7 @@ func _bi_Pons(frame Frame, parameters []Node) *CallResult {
 
 	ws := frame.workspace()
 
-	for n, v := range ws.rootFrame.vars {
+	for n, v := range ws.rootFrame.getVars().vars {
 		if !v.buried {
 			printVariable(ws, n, v.value)
 		}
@@ -1217,9 +1339,9 @@ func _bi_Ern(frame Frame, parameters []Node) *CallResult {
 	ws := frame.workspace()
 	for _, n := range names {
 		name := strings.ToUpper(n.value)
-		v, exists := ws.rootFrame.vars[name]
+		v, exists := ws.rootFrame.getVars().vars[name]
 		if exists && !v.buried {
-			delete(ws.rootFrame.vars, name)
+			delete(ws.rootFrame.getVars().vars, name)
 		}
 	}
 
@@ -1230,9 +1352,9 @@ func _bi_Erns(frame Frame, parameters []Node) *CallResult {
 
 	ws := frame.workspace()
 
-	for n, v := range ws.rootFrame.vars {
+	for n, v := range ws.rootFrame.getVars().vars {
 		if !v.buried {
-			delete(ws.rootFrame.vars, n)
+			delete(ws.rootFrame.getVars().vars, n)
 		}
 	}
 	return nil
@@ -1287,9 +1409,8 @@ func _bi_BuryAll(frame Frame, parameters []Node) *CallResult {
 		}
 	}
 
-	for _, v := range ws.rootFrame.vars {
-		v.buried = true
-	}
+	ws.rootFrame.getVars().setAllBuried(ws.rootFrame, true)
+
 	return nil
 }
 
@@ -1302,11 +1423,7 @@ func _bi_BuryName(frame Frame, parameters []Node) *CallResult {
 
 	ws := frame.workspace()
 	for _, n := range names {
-		name := strings.ToUpper(n.value)
-		v, exists := ws.rootFrame.vars[name]
-		if exists {
-			v.buried = true
-		}
+		ws.rootFrame.getVars().setBuried(ws.rootFrame, n.value, true)
 	}
 
 	return nil
@@ -1344,9 +1461,8 @@ func _bi_UnburyAll(frame Frame, parameters []Node) *CallResult {
 		}
 	}
 
-	for _, v := range ws.rootFrame.vars {
-		v.buried = false
-	}
+	ws.rootFrame.getVars().setAllBuried(ws.rootFrame, false)
+
 	return nil
 }
 
@@ -1358,11 +1474,7 @@ func _bi_UnburyName(frame Frame, parameters []Node) *CallResult {
 
 	ws := frame.workspace()
 	for _, n := range names {
-		name := strings.ToUpper(n.value)
-		v, exists := ws.rootFrame.vars[name]
-		if exists {
-			v.buried = false
-		}
+		ws.rootFrame.getVars().setBuried(ws.rootFrame, n.value, false)
 	}
 
 	return nil
@@ -1801,4 +1913,11 @@ func registerBuiltInProcedures(workspace *Workspace) {
 
 	workspace.registerBuiltIn("GO", "", 1, _bi_Go)
 	workspace.registerBuiltIn("LABEL", "", 1, _bi_Label)
+
+	workspace.registerBuiltIn("ERPROPS", "", 0, _bi_Erprops)
+	workspace.registerBuiltIn("GPROP", "", 2, _bi_Gprop)
+	workspace.registerBuiltIn("PLIST", "", 1, _bi_Plist)
+	workspace.registerBuiltIn("PPROP", "", 3, _bi_Pprop)
+	workspace.registerBuiltIn("PPS", "", 0, _bi_Pps)
+	workspace.registerBuiltIn("REMPROP", "", 2, _bi_Remprop)
 }

@@ -5,7 +5,7 @@ import (
 )
 
 var infixOps []string = []string{"+", "-", "*", "/", "(", ")", "=", "<>", "<", ">", "<=", ">=", "OR", "AND"}
-var infixProc []string = []string{"SUM", "DIFFERENCE", "PRODUCT", "QUOTIENT", "", "", "EQUALP", "NOTEQUALP", "LESSP", "GREATERP", "LESSEQUALP", "GREATEREQUALP", "EITHER", "BOTH"}
+var infixProc []string = []string{"SUM", "DIFFERENCE", "PRODUCT", "QUOTIENT", "", "", "EQUALP", "NOTEQUALP", "LESSP", "GREATERP", "LESSEQUALP", "GREATEREQUALP", "OR", "AND"}
 var infixPrec []int = []int{1, 1, 2, 2, 3, 4, 4, 0, 0, 0, 0, 0, 0, 0, 0}
 
 func isProcedure(wn *WordNode, ws *Workspace) bool {

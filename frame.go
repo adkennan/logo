@@ -8,6 +8,183 @@ type Variable struct {
 	name   string
 	value  Node
 	buried bool
+	props  map[string]Node
+}
+
+func newVar(name string) *Variable {
+	return &Variable{name, nil, false, nil}
+}
+
+func newVarVal(name string, value Node) *Variable {
+	return &Variable{name, value, false, nil}
+}
+
+func (this *Variable) hasProps() bool { return this.props != nil }
+
+func (this *Variable) setProp(name string, value Node) {
+	if this.props == nil {
+		this.props = make(map[string]Node)
+	}
+	this.props[name] = value
+}
+
+func (this *Variable) getProp(name string) Node {
+	if this.props == nil {
+		return nil
+	}
+
+	val, ok := this.props[name]
+	if !ok {
+		return nil
+	}
+
+	return val
+}
+
+func (this *Variable) clearProp(name string) {
+	if this.props == nil {
+		return
+	}
+
+	delete(this.props, name)
+}
+
+func (this *Variable) clearProps() {
+	if this.props == nil {
+		return
+	}
+	this.props = nil
+}
+
+type VarList struct {
+	vars map[string]*Variable
+}
+
+func newVarList() *VarList {
+	return &VarList{nil}
+}
+
+func (this *VarList) createLocal(name string) {
+	if this.vars == nil {
+		this.vars = make(map[string]*Variable)
+	}
+	this.vars[strings.ToUpper(name)] = newVar(name)
+}
+
+func (this *VarList) setVariable(frame Frame, name string, value Node) {
+
+	uname := strings.ToUpper(name)
+	v := this.getVariableInner(frame, name, uname, true)
+	v.value = value
+}
+
+func (this *VarList) getVariable(frame Frame, name string) Node {
+
+	uname := strings.ToUpper(name)
+	v := this.getVariableInner(frame, name, uname, false)
+	if v == nil {
+		return nil
+	}
+	return v.value
+}
+
+func (this *VarList) getVariableInner(frame Frame, name, uname string, canCreate bool) *Variable {
+
+	if this.vars != nil {
+		v, exists := this.vars[uname]
+		if exists {
+			return v
+		}
+	}
+	pf := frame.parentFrame()
+	if pf == nil {
+		if canCreate {
+			if this.vars == nil {
+				this.vars = make(map[string]*Variable)
+			}
+			v := newVar(name)
+			this.vars[uname] = v
+			return v
+		}
+		return nil
+	}
+	return pf.getVars().getVariableInner(pf, name, uname, canCreate)
+}
+
+func (this *VarList) hasProps(frame Frame, name string) bool {
+
+	uname := strings.ToUpper(name)
+	v := this.getVariableInner(frame, name, uname, false)
+	if v == nil {
+		return false
+	}
+	return v.hasProps()
+}
+
+func (this *VarList) setProp(frame Frame, varName, propName string, value Node) {
+
+	uname := strings.ToUpper(varName)
+	v := this.getVariableInner(frame, varName, uname, true)
+	v.setProp(propName, value)
+}
+
+func (this *VarList) getProp(frame Frame, varName, propName string) Node {
+	uname := strings.ToUpper(varName)
+	v := this.getVariableInner(frame, varName, uname, false)
+	if v == nil {
+		return nil
+	}
+	return v.getProp(propName)
+}
+
+func (this *VarList) clearProp(frame Frame, varName, propName string) {
+	uname := strings.ToUpper(varName)
+	v := this.getVariableInner(frame, varName, uname, false)
+	if v == nil {
+		return
+	}
+	v.clearProp(propName)
+}
+
+func (this *VarList) clearProps() {
+	if this.vars == nil {
+		return
+	}
+
+	for _, v := range this.vars {
+		if v.hasProps() {
+			v.clearProps()
+		}
+	}
+}
+
+func (this *VarList) setBuried(frame Frame, name string, buried bool) {
+
+	uname := strings.ToUpper(name)
+	v := this.getVariableInner(frame, name, uname, false)
+	if v == nil {
+		return
+	}
+	v.buried = buried
+}
+
+func (this *VarList) isBuried(frame Frame, name string) bool {
+	uname := strings.ToUpper(name)
+	v := this.getVariableInner(frame, name, uname, false)
+	if v == nil {
+		return false
+	}
+	return v.buried
+}
+
+func (this *VarList) setAllBuried(frame Frame, buried bool) {
+	if this.vars == nil {
+		return
+	}
+
+	for _, v := range this.vars {
+		v.buried = buried
+	}
 }
 
 type CallResult struct {
@@ -42,9 +219,7 @@ type Frame interface {
 	eval(parameters []Node) *CallResult
 	setTestValue(node Node)
 	getTestValue() Node
-	createLocal(name string)
-	setVariable(name string, value Node)
-	getVariable(name string) Node
+	getVars() *VarList
 }
 
 type Procedure interface {
@@ -67,7 +242,7 @@ func (this *BuiltInProcedure) parameterCount() int {
 }
 
 func (this *BuiltInProcedure) createFrame(parentFrame Frame, caller *WordNode) Frame {
-	return &BuiltInFrame{parentFrame.workspace(), parentFrame, parentFrame.depth() + 1, caller, this.realProc, make(map[string]*Variable), this.name}
+	return &BuiltInFrame{parentFrame.workspace(), parentFrame, parentFrame.depth() + 1, caller, this.realProc, newVarList(), this.name}
 }
 
 func (this *BuiltInProcedure) allowVarParameters() bool {
@@ -80,7 +255,7 @@ type BuiltInFrame struct {
 	d          int
 	callerNode *WordNode
 	realProc   evaluator
-	vars       map[string]*Variable
+	vars       *VarList
 	name       string
 }
 
@@ -112,40 +287,15 @@ func (this *BuiltInFrame) getTestValue() Node {
 	return nil
 }
 
-func (this *BuiltInFrame) createLocal(name string) {
-	this.vars[strings.ToUpper(name)] = &Variable{name, nil, false}
-}
-
-func (this *BuiltInFrame) setVariable(name string, value Node) {
-
-	uname := strings.ToUpper(name)
-	v, exists := this.vars[uname]
-	if exists {
-		v.value = value
-	} else if this.parent == nil {
-		this.vars[uname] = &Variable{name, value, false}
-	} else {
-		this.parent.setVariable(name, value)
-	}
-}
-
-func (this *BuiltInFrame) getVariable(name string) Node {
-
-	v, exists := this.vars[strings.ToUpper(name)]
-	if exists {
-		return v.value
-	} else if this.parent == nil {
-		return nil
-	} else {
-		return this.parent.getVariable(name)
-	}
+func (this *BuiltInFrame) getVars() *VarList {
+	return this.vars
 }
 
 type RootFrame struct {
 	ws      *Workspace
 	node    Node
 	testVal Node
-	vars    map[string]*Variable
+	vars    *VarList
 }
 
 func (this *RootFrame) workspace() *Workspace {
@@ -175,29 +325,8 @@ func (this *RootFrame) getTestValue() Node {
 	return this.testVal
 }
 
-func (this *RootFrame) createLocal(name string) {
-	this.vars[strings.ToUpper(name)] = &Variable{name, nil, false}
-}
-
-func (this *RootFrame) setVariable(name string, value Node) {
-
-	uname := strings.ToUpper(name)
-	v, exists := this.vars[uname]
-	if exists {
-		v.value = value
-	} else {
-		this.vars[uname] = &Variable{name, value, false}
-	}
-}
-
-func (this *RootFrame) getVariable(name string) Node {
-
-	v, exists := this.vars[strings.ToUpper(name)]
-	if exists {
-		return v.value
-	} else {
-		return nil
-	}
+func (this *RootFrame) getVars() *VarList {
+	return this.vars
 }
 
 type InterpretedFrame struct {
@@ -208,7 +337,7 @@ type InterpretedFrame struct {
 	procedure  *InterpretedProcedure
 	returnVal  Node
 	testVal    Node
-	vars       map[string]*Variable
+	vars       *VarList
 	stopped    bool
 	aborted    bool
 }
@@ -237,8 +366,8 @@ func (this *InterpretedFrame) depth() int {
 func (this *InterpretedFrame) eval(parameters []Node) *CallResult {
 
 	for px := 0; px < len(parameters); px++ {
-		this.createLocal(this.procedure.parameters[px])
-		this.setVariable(this.procedure.parameters[px], parameters[px])
+		this.vars.createLocal(this.procedure.parameters[px])
+		this.vars.setVariable(this, this.procedure.parameters[px], parameters[px])
 	}
 
 	if this.procedure.firstNode != nil {
@@ -271,34 +400,8 @@ func (this *InterpretedFrame) getTestValue() Node {
 	return this.testVal
 }
 
-func (this *InterpretedFrame) createLocal(name string) {
-	this.vars[strings.ToUpper(name)] = &Variable{name, nil, false}
-}
-
-func (this *InterpretedFrame) setVariable(name string, value Node) {
-
-	uname := strings.ToUpper(name)
-	v, exists := this.vars[uname]
-	if exists {
-		v.value = value
-	} else if this.parent == nil {
-		this.vars[uname] = &Variable{name, value, false}
-	} else {
-		this.parent.setVariable(name, value)
-	}
-}
-
-func (this *InterpretedFrame) getVariable(name string) Node {
-
-	var n Node
-	v, exists := this.vars[strings.ToUpper(name)]
-	if exists {
-		n = v.value
-	} else if this.parent != nil {
-		n = this.parent.getVariable(name)
-	}
-
-	return n
+func (this *InterpretedFrame) getVars() *VarList {
+	return this.vars
 }
 
 type InterpretedProcedure struct {
@@ -312,7 +415,7 @@ type InterpretedProcedure struct {
 func (this *InterpretedProcedure) createFrame(parentFrame Frame, caller *WordNode) Frame {
 
 	parentFrame.workspace().trace(parentFrame.depth(), this.name)
-	return &InterpretedFrame{parentFrame.workspace(), parentFrame, parentFrame.depth() + 1, caller, this, nil, nil, make(map[string]*Variable), false, false}
+	return &InterpretedFrame{parentFrame.workspace(), parentFrame, parentFrame.depth() + 1, caller, this, nil, nil, newVarList(), false, false}
 }
 
 func (this *InterpretedProcedure) parameterCount() int {
