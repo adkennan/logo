@@ -11,6 +11,7 @@ type File interface {
 	Id() int
 	Name() string
 	ReadLine() (string, error)
+	ReadChar() (rune, error)
 	Write(text string) error
 	Close() error
 	IsInteractive() bool
@@ -262,6 +263,11 @@ func (this *NormalFile) ReadLine() (string, error) {
 	return string(line), nil
 }
 
+func (this *NormalFile) ReadChar() (rune, error) {
+	r, _, err := this.r.ReadRune()
+	return r, err
+}
+
 func (this *NormalFile) Write(text string) error {
 
 	_, err := this.f.WriteString(text)
@@ -301,6 +307,12 @@ func (this *StdIOFile) ReadLine() (string, error) {
 		return "", err
 	}
 	return string(line), nil
+}
+
+func (this *StdIOFile) ReadChar() (rune, error) {
+	r := bufio.NewReader(this.stdin)
+	c, _, err := r.ReadRune()
+	return c, err
 }
 
 func (this *StdIOFile) Write(text string) error {

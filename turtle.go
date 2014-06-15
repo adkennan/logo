@@ -345,7 +345,7 @@ func initTurtle(ws *Workspace) *Turtle {
 	ws.registerBuiltIn("CLEARSCREEN", "CS", 0, _t_ClearScreen)
 	ws.registerBuiltIn("HOME", "", 0, _t_Home)
 	ws.registerBuiltIn("SETPOS", "", 1, _t_SetPos)
-	ws.registerBuiltIn("SETHEADING", "SETH", 2, _t_SetHeading)
+	ws.registerBuiltIn("SETHEADING", "SETH", 1, _t_SetHeading)
 	ws.registerBuiltIn("SETX", "", 1, _t_SetX)
 	ws.registerBuiltIn("SETY", "", 1, _t_SetY)
 	ws.registerBuiltIn("SHOWTURTLE", "ST", 0, _t_ShowTurtle)

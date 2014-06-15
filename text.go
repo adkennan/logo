@@ -101,6 +101,16 @@ func (this *ConsoleScreen) Clear() {
 		[]*Region{&Region{0, 0, s.W(), s.H()}}))
 }
 
+func (this *ConsoleScreen) ReadChar() (rune, error) {
+
+	m := this.channel.Wait()
+	switch ks := m.(type) {
+	case *KeyMessage:
+		return ks.Char, nil
+	}
+	return 0, nil
+}
+
 func (this *ConsoleScreen) ReadLine() (string, error) {
 	cursorPos := 0
 	chars := make([]rune, 0, 10)

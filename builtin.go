@@ -133,6 +133,50 @@ func _bi_ReadList(frame Frame, parameters []Node) *CallResult {
 	return returnResult(n)
 }
 
+func _bi_ReadWord(frame Frame, parameters []Node) *CallResult {
+
+	line, err := frame.workspace().files.reader.ReadLine()
+	if err != nil {
+		return errorResult(err)
+	}
+	return returnResult(newWordNode(-1, -1, line, true))
+}
+
+func _bi_ReadChar(frame Frame, parameters []Node) *CallResult {
+
+	c, err := frame.workspace().files.reader.ReadChar()
+	if err == io.EOF {
+		return returnResult(newListNode(-1, -1, nil))
+	}
+	return returnResult(newWordNode(-1, -1, string(c), true))
+}
+
+func _bi_ReadChars(frame Frame, parameters []Node) *CallResult {
+
+	n, err := evalToNumber(parameters[0])
+	if err != nil {
+		return errorResult(err)
+	}
+	if n < 0 {
+		return errorResult(errorBadInput(parameters[0]))
+	}
+
+	nn := int(n)
+	chars := make([]rune, 0, nn)
+	for ix := 0; ix < nn; ix++ {
+		c, err := frame.workspace().files.reader.ReadChar()
+		if err != nil {
+			if err == io.EOF {
+				break
+			}
+			return errorResult(err)
+		}
+		chars = append(chars, c)
+	}
+
+	return returnResult(newWordNode(-1, -1, string(chars), true))
+}
+
 func _bi_Request(frame Frame, parameters []Node) *CallResult {
 
 	fw := frame.workspace().files.reader
@@ -1797,6 +1841,9 @@ func registerBuiltInProcedures(workspace *Workspace) {
 	workspace.registerBuiltInWithVarParams("TYPE", "TY", 1, _bi_Type)
 
 	workspace.registerBuiltIn("READLIST", "RL", 0, _bi_ReadList)
+	workspace.registerBuiltIn("READWORD", "RW", 0, _bi_ReadWord)
+	workspace.registerBuiltIn("READCHAR", "RC", 0, _bi_ReadChar)
+	workspace.registerBuiltIn("READCHARS", "RCS", 1, _bi_ReadChars)
 	workspace.registerBuiltIn("REQUEST", "", 0, _bi_Request)
 
 	workspace.registerBuiltIn("REPEAT", "", 2, _bi_Repeat)
