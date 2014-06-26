@@ -20,6 +20,7 @@ var keywordIf string = "IF"
 var keywordGo string = "GO"
 var keywordLabel string = "LABEL"
 var keywordError string = "ERROR"
+var keywordEdit string = "EDIT"
 
 var trueNode Node = newWordNode(-1, -1, keywordTrue, true)
 var falseNode Node = newWordNode(-1, -1, keywordFalse, true)

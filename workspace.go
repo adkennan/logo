@@ -59,7 +59,7 @@ func CreateWorkspace(w, h int) *Workspace {
 
 func (this *Workspace) listen() {
 
-	c := this.broker.Subscribe(MT_KeyPress, MT_EditStart, MT_EditStop)
+	c := this.broker.Subscribe("Workspace", MT_KeyPress, MT_EditStart, MT_EditStop)
 
 	listening := true
 	for m := c.Wait(); c != nil; m = c.Wait() {
@@ -162,7 +162,7 @@ func (this *Workspace) RunInterpreter() {
 
 	go this.readFile()
 
-	l := this.broker.Subscribe(MT_Quit)
+	l := this.broker.Subscribe("Interpreter", MT_Quit)
 	l.Wait()
 }
 

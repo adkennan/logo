@@ -26,6 +26,7 @@ func callProcedure(frame Frame, node Node, withInfix bool) (*CallResult, Node) {
 	var proc Procedure
 	var parameters []Node
 	var procName string
+	var err error
 	if wn.value[0] == ':' {
 		proc = frame.workspace().findProcedure(keywordThing)
 		procName = keywordThing
@@ -43,7 +44,6 @@ func callProcedure(frame Frame, node Node, withInfix bool) (*CallResult, Node) {
 		if proc == nil {
 			return errorResult(errorProcedureNotFound(node, wn.value)), nil
 		}
-		var err error
 		if proc.parameterCount() > 0 {
 			paramCount := proc.parameterCount()
 			if proc.allowVarParameters() && wn.isFirstOfGroup {
@@ -56,6 +56,13 @@ func callProcedure(frame Frame, node Node, withInfix bool) (*CallResult, Node) {
 		} else {
 			parameters = make([]Node, 0, 0)
 			node = node.next()
+		}
+	}
+
+	if procName == keywordEdit && node != nil {
+		parameters, node, err = fetchParameters(frame, wn, procName, node, 1, withInfix)
+		if err != nil {
+			return errorResult(err), nil
 		}
 	}
 

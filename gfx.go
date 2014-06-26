@@ -222,7 +222,7 @@ func (this *sdlWindow) runEventLoop() {
 						rs := utf16.Decode([]uint16{e.Keysym.Unicode})
 						r = rs[0]
 					}
-					km = &KeyMessage{MessageBase{MT_KeyPress}, e.Keysym.Sym, r}
+					km = &KeyMessage{MessageBase{MT_KeyPress}, e.Keysym.Sym, e.Keysym.Mod, r}
 					this.b.Publish(km)
 					keyCount = keyRepeatFirst
 

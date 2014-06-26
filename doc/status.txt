@@ -1,0 +1,365 @@
+
+BACK (BK)
+
+CLEARSCREEN (CS)
+
+FORWARD (FD)
+
+HIDETURTLE (HT)
+
+HOME
+
+LEFT (LT)
+
+RIGHT (RT)
+
+SETHEADING (SETH)
+
+SETPOS
+
+SETX
+
+SETY
+
+SHOWTURTLE (ST)
+
+HEADING
+
+POS
+
+SHOWNP
+
+TOWARDS ** Not Implemented **
+
+XCOR
+
+YCOR
+
+CLEAN
+
+DOT 
+
+FENCE
+
+FILL ** Not Implemented **
+
+PENDOWN (PD)
+
+PENERASE (PE) 
+
+PENREVERSE (PX) 
+
+PENUP (PU)
+
+SETBG 
+
+SETPC 
+
+WINDOW
+
+WRAP 
+
+BACKGROUND (BG) 
+
+DOTP 
+
+PEN 
+
+PENCOLOR 
+
+CLEARTEXT (CT) 
+
+CURSOR 
+
+FULLSCREEN (FS)
+
+SETCURSOR 
+
+SPLITSCREEN (SS)
+
+TEXTSCREEN (TS)
+
+WIDTH 
+
+HEIGHT
+
+BUTFIRST (BF) 
+
+BUTLAST (BL) 
+
+FIRST
+
+ITEM (NTH)
+
+LAST
+
+MEMBER ** Not Implemented **
+
+FPUT
+
+LIST 
+
+LPUT
+
+PARSE 
+
+SENTENCE (SE) 
+
+WORD 
+
+ASCII 
+
+BEFOREP ** Not Implemented **
+
+CHAR 
+
+COUNT
+
+EMPTYP
+
+EQUALP
+
+LISTP 
+
+MEMBERP
+
+NUMBERP 
+
+WORDP
+
+LOWERCASE
+
+UPPERCASE
+
+EDN ** Not Implemented **
+
+EDNS ** Not Implemented **
+
+LOCAL 
+
+MAKE
+
+NAME 
+
+NAMEP 
+
+THING
+
+ARCTAN
+
+COS
+
+DIFFERENCE
+
+FORM 
+
+INT 
+
+INTQUOTIENT 
+
+PRODUCT
+
+QUOTIENT
+
+RANDOM
+
+REMAINDER
+
+RERANDOM ** Not Implemented **
+
+ROUND 
+
+SIN
+
+SQRT
+
+SUM
+
+IF 
+
+IFFALSE (IFF)
+
+IFTRUE (IFT)
+
+TEST
+
+CO ** Not Implemented **
+
+OUTPUT
+
+PAUSE ** Not Implemented **
+
+STOP
+
+WAIT ** Should be 60ths of a second **
+
+CATCH
+
+ERROR ** Not Implemented **
+
+GO 
+
+LABEL
+
+REPEAT
+
+RUN
+
+THROW
+
+STEP ** Not Implemented **
+
+TRACE
+
+UNSTEP ** Not Implemented **
+
+UNTRACE
+
+COPYDEF ** Not Implemented **
+
+DEFINE ** Not Implemented **
+
+DEFINEDP ** Not Implemented **
+
+PRIMITIVEP ** Not Implemented **
+
+TEXT ** Name used for drawing text **
+
+AND
+
+NOT
+
+OR
+
+BUTTONP ** Not Implemented **
+
+PADDLE ** Not Implemented **
+
+KEYP ** Not Implemented **
+
+READCHAR (RC) 
+
+READCHARS (RCS) 
+
+READLIST (RL) 
+
+READWORD (RW) 
+
+PRINT
+
+SHOW
+
+TYPE
+
+TOOT ** Not Implemented **
+
+PO
+
+POALL
+
+PON
+
+PONS
+
+POPS
+
+POT
+
+POTS
+
+ERALL
+
+ERASE
+
+ERN
+
+ERPS
+
+BURY
+
+BURYALL
+
+BURYNAME
+
+UNBURY
+
+UNBURYALL
+
+UNBURYNAME
+
+CATALOG ** Include file sizes **
+
+CREATEDIR
+
+EDITFILE ** Not Implemented **
+
+ERASEFILE (ERF) 
+
+FILEP
+
+LOADHELP ** Not Implemented **
+
+ONLINE ** Not Implemented **
+
+POFILE
+
+PREFIX
+
+RENAME
+
+SETPREFIX
+
+LOAD
+
+SAVE
+
+SAVEL
+
+LOADPIC ** Not Implemented **
+
+PRINTPIC ** Not Implemented **
+
+SAVEPIC ** Not Implemented **
+
+DRIBBLE ** Not Implemented **
+
+NODRIBBLE ** Not Implemented **
+
+ALLOPEN ** Not Implemented **
+
+CLOSE ** Not Implemented **
+
+CLOSEALL ** Not Implemented **
+
+FILELEN ** Not Implemented **
+
+OPEN ** Not Implemented **
+
+READER ** Not Implemented **
+
+READPOS ** Not Implemented **
+
+SETREAD ** Not Implemented **
+
+SETREADPOS ** Not Implemented **
+
+SETWRITE ** Not Implemented **
+
+SETWRITEPOS ** Not Implemented **
+
+WRITEPOS ** Not Implemented **
+
+WRITER ** Not Implemented **
+
+ERPROPS
+
+GPROP
+
+PLIST
+
+PPROP
+
+PPS
+
+REMPROP
+

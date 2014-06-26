@@ -332,7 +332,7 @@ func initTurtle(ws *Workspace) *Turtle {
 
 	turtle.sprite = ws.screen.screen.CreateSurface(turtleSize*2, turtleSize*2)
 	turtle.image = ws.screen.screen.CreateSurface(ws.screen.screen.W(), ws.screen.screen.H())
-	turtle.channel = ws.broker.Subscribe(MT_VisibleAreaChange)
+	turtle.channel = ws.broker.Subscribe("Turtle", MT_VisibleAreaChange)
 	turtle.gridSweep = turtle.image.W() / 32
 	turtle.dirtyGrid = make([]bool, turtle.gridSweep*(turtle.image.H()/32))
 	turtle.updateSprite()

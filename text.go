@@ -9,6 +9,7 @@ import (
 type KeyMessage struct {
 	MessageBase
 	Sym  uint32
+	Mod  uint32
 	Char rune
 }
 
@@ -26,6 +27,16 @@ const (
 	K_PAGEUP    = 0x118
 	K_PAGEDOWN  = 0x119
 	K_ESCAPE    = 0x1b
+
+	K_NONE   = 0
+	K_LSHIFT = 0x1
+	K_RSHIFT = 0x2
+	K_LCTRL  = 0x40
+	K_RCTRL  = 0x80
+	K_LALT   = 0x100
+	K_RALT   = 0x200
+	K_LMETA  = 0x400
+	K_RMETA  = 0x800
 
 	K_F1 = 0x11a
 	K_F2 = 0x11b
@@ -52,7 +63,7 @@ func initConsole(workspace *Workspace, w, h int) *ConsoleScreen {
 		0,
 		0,
 		0,
-		workspace.broker.Subscribe(MT_KeyPress, MT_EditStart, MT_EditStop)}
+		workspace.broker.Subscribe("Console", MT_KeyPress, MT_EditStart, MT_EditStop)}
 
 	cs.sfcs[0].Clear()
 	cs.sfcs[1].Clear()
@@ -115,26 +126,12 @@ func (this *ConsoleScreen) ReadLine() (string, error) {
 	cursorPos := 0
 	chars := make([]rune, 0, 10)
 	this.drawEditLine(cursorPos, chars)
-	editActive := false
+	this.channel.Resume()
 	m := this.channel.Wait()
 	for ; m != nil; m = this.channel.Wait() {
 		switch ks := m.(type) {
-		case *MessageBase:
-			{
-				switch ks.MessageType() {
-				case MT_EditStart:
-					editActive = true
-				case MT_EditStop:
-					editActive = false
-					this.drawEditLine(cursorPos, chars)
-				}
-			}
 		case *KeyMessage:
 			{
-				if editActive {
-					continue
-				}
-
 				switch ks.Sym {
 				case K_RETURN:
 					line := string(chars)
@@ -142,6 +139,7 @@ func (this *ConsoleScreen) ReadLine() (string, error) {
 					this.clearEditLine()
 					this.Write(line)
 					this.Write("\n")
+					this.channel.Pause()
 					return line, nil
 				case K_LEFT:
 					if cursorPos > 0 {

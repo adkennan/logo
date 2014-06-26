@@ -1,6 +1,10 @@
 package main
 
 const (
+	queueSize = 100
+)
+
+const (
 	MT_KeyPress = iota
 	MT_UpdateText
 	MT_UpdateGfx
@@ -22,10 +26,12 @@ type MessageBase struct {
 func (this *MessageBase) MessageType() int { return this.messageType }
 
 type Channel struct {
-	c chan Message
-	f []int
-	p bool
-	b *MessageBroker
+	name string
+	qc   int
+	c    chan Message
+	f    []int
+	p    bool
+	b    *MessageBroker
 }
 
 func (this *Channel) Pause() {
@@ -37,12 +43,15 @@ func (this *Channel) Resume() {
 }
 
 func (this *Channel) Wait() Message {
-	return <-this.c
+	m := <-this.c
+	this.qc--
+	return m
 }
 
 func (this *Channel) Poll() Message {
 	select {
 	case m := <-this.c:
+		this.qc--
 		return m
 	default:
 	}
@@ -70,6 +79,10 @@ func filterContains(filter []int, mt int) bool {
 func (this *Channel) push(m Message) {
 
 	if len(this.f) == 0 || filterContains(this.f, m.MessageType()) {
+		this.qc++
+		if this.qc == queueSize {
+			println(this.name, "Queue filled.")
+		}
 		this.c <- m
 	}
 }
@@ -83,8 +96,8 @@ func CreateMessageBroker() *MessageBroker {
 		make([]*Channel, 0, 10)}
 }
 
-func (this *MessageBroker) Subscribe(messageTypes ...int) *Channel {
-	l := &Channel{make(chan Message, 100), messageTypes, false, this}
+func (this *MessageBroker) Subscribe(name string, messageTypes ...int) *Channel {
+	l := &Channel{name, 0, make(chan Message, queueSize), messageTypes, false, this}
 	this.channels = append(this.channels, l)
 	return l
 }

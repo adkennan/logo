@@ -7,6 +7,8 @@ import (
 	"unicode"
 )
 
+const noSelection = -1
+
 type Editor struct {
 	ws                 *Workspace
 	channel            *Channel
@@ -23,10 +25,10 @@ func initEditor(ws *Workspace, w, h int) *Editor {
 
 	img := ws.screen.screen.CreateSurface(w, h)
 
-	c := ws.broker.Subscribe(MT_KeyPress)
+	c := ws.broker.Subscribe("Editor", MT_KeyPress)
 	c.Pause()
 
-	ws.registerBuiltIn("EDIT", "", 1, _ed_Edit)
+	ws.registerBuiltIn(keywordEdit, "", 0, _ed_Edit)
 
 	e := &Editor{
 		ws,
@@ -75,10 +77,10 @@ func (this *Editor) StartEditor(content string) string {
 	this.buffer = []string{}
 	this.x = 0
 	this.y = 0
-	this.sx1 = 0
-	this.sy1 = 0
-	this.sx2 = 0
-	this.sy2 = 0
+	this.sx1 = noSelection
+	this.sy1 = noSelection
+	this.sx2 = noSelection
+	this.sy2 = noSelection
 	this.clip = ""
 
 	this.initEditorUi()
@@ -124,50 +126,61 @@ func (this *Editor) DeleteSelection() (linesDeleted int) {
 
 	l := this.buffer[this.sy1][this.sx1:] + this.buffer[this.sy2][:this.sx2]
 	this.buffer[this.sy1] = l
-	linesDeleted = this.sy2 - this.sy1
-	if this.sy2 > this.sy1 {
+	s := intMin(this.sy1, this.sy2)
+	e := intMax(this.sy1, this.sy2)
+	linesDeleted = e - s
+	if e > s {
 		this.buffer = append(this.buffer[:this.sy1+1], this.buffer[this.sy2:]...)
 	}
 
-	linesDeleted = this.sy2 - this.sy1
-
-	this.sy1 = 0
-	this.sx1 = 0
-	this.sy2 = 0
-	this.sx2 = 0
+	this.ClearSelection()
 
 	return
 }
 
 func (this *Editor) CopySelection() {
 	this.clip = this.GetSelection()
+	println("Copied \"", this.clip, "\"")
 }
 
 func (this *Editor) CutSelection() {
 	this.CopySelection()
 	this.DeleteSelection()
+	println("Cut \"", this.clip, "\"")
+}
+
+func (this *Editor) PasteSelection() int {
+	if len(this.clip) == 0 {
+		return 0
+	}
+	println("Paste \"", this.clip, "\"")
+	return this.Insert(this.clip)
 }
 
 func (this *Editor) GetSelection() string {
-	if this.HasSelection() {
+	if !this.HasSelection() {
 		return ""
 	}
 
 	if this.sy1 == this.sy2 {
-		return this.buffer[this.sy1][this.sx1:this.sx2]
+		println("On same line.")
+		return this.buffer[this.sy1][intMin(this.sx1, this.sx2) : intMax(this.sx1, this.sx2)+1]
 	}
 
 	var b bytes.Buffer
-	lix := this.sy2 - this.sy2
-	for ix, il := range this.buffer[this.sy1:this.sy2] {
+	s := intMin(this.sy1, this.sy2)
+	e := intMax(this.sy1, this.sy2)
+	lix := e - s
+	for ix, il := range this.buffer[s : e+1] {
 		if ix == 0 {
-			b.WriteString(this.buffer[this.sy1][this.sx1:])
+			b.WriteString(this.buffer[s][this.sx1:])
+			b.WriteRune('\n')
 		} else if ix == lix {
-			b.WriteString(this.buffer[this.sy1+ix][:this.sx2])
+			b.WriteString(this.buffer[s+ix][:this.sx2+1])
 		} else {
 			b.WriteString(il)
+			b.WriteRune('\n')
 		}
-		b.WriteRune('\n')
 	}
 	return b.String()
 }
@@ -221,7 +234,7 @@ func (this *Editor) DeleteRune() (linesDeleted int) {
 }
 
 func (this *Editor) HasSelection() bool {
-	return this.sy1 != this.sy2 || this.sx1 != this.sx2
+	return this.sx1 != noSelection
 }
 
 func (this *Editor) IsInSelection(x, y int) bool {
@@ -229,15 +242,30 @@ func (this *Editor) IsInSelection(x, y int) bool {
 		return false
 	}
 
-	if y == this.sy1 {
-		return x >= this.sx1
+	if this.sy1 == this.sy2 {
+		if y != this.sy1 {
+			return false
+		}
+		x1, x2 := sortInts(this.sx1, this.sx2)
+		return x1 <= x && x <= x2
+
+	} else if this.sy1 < this.sy2 {
+		if y == this.sy1 {
+			return x >= this.sx1
+		}
+		if y == this.sy2 {
+			return x <= this.sx2
+		}
+		return this.sy1 < y && y < this.sy2
 	}
 
 	if y == this.sy2 {
-		return x <= this.sx2
+		return x >= this.sx2
 	}
-
-	return this.sy1 < y && y < this.sy2
+	if y == this.sy1 {
+		return x <= this.sx1
+	}
+	return this.sy2 < y && y < this.sy1
 }
 
 func (this *Editor) RenderLines(s, e int) {
@@ -252,10 +280,11 @@ func (this *Editor) RenderLines(s, e int) {
 		return
 	}
 
-	cy := s
 	if s < this.vy {
 		s = this.vy
 	}
+	cy := s
+
 	if e > this.vy+lc {
 		e = this.vy + lc
 	}
@@ -295,8 +324,7 @@ func (this *Editor) RenderLines(s, e int) {
 
 	this.invalidate(0, sy, this.image.W(), y)
 
-	this.writeStatus(this.image.W()/2, fmt.Sprintf("Line: %d Col: %d    ", this.y, this.x))
-	this.writeStatus(this.image.W()-(gm.charWidth*10), fmt.Sprintf("%d -> %d    ", s, e))
+	this.writeStatus(this.image.W()/2, fmt.Sprintf("Line: %d Col: %d    ", this.x, this.y))
 }
 
 func (this *Editor) invalidate(x, y, w, h int) {
@@ -380,75 +408,141 @@ func (this *Editor) RunEditor() {
 		switch ks := m.(type) {
 		case *KeyMessage:
 			{
-				switch ks.Sym {
-				case K_LEFT:
-					this.CursorLeft()
-				case K_RIGHT:
-					this.CursorRight()
-				case K_UP:
-					this.CursorUp()
-				case K_DOWN:
-					this.CursorDown()
-				case K_HOME:
-					this.CursorHome()
-				case K_END:
-					this.CursorEnd()
-				case K_BACKSPACE:
-					if this.CursorLeft() {
-						if this.DeleteRune() > 0 {
+				pcx := this.x
+				pcy := this.y
+				updateSel := false
+				shiftHeld := (ks.Mod&K_LSHIFT) == K_LSHIFT || (ks.Mod&K_RSHIFT) == K_RSHIFT
+				ctrlHeld := (ks.Mod&K_LCTRL) == K_LCTRL || (ks.Mod&K_RCTRL) == K_RCTRL
+
+				if ctrlHeld {
+					switch ks.Sym {
+					case 'c':
+						if this.HasSelection() {
+							this.CopySelection()
+						}
+					case 'x':
+						if this.HasSelection() {
+							this.CutSelection()
+							el = len(this.buffer)
+						}
+					case 'v':
+						if this.HasSelection() {
+							this.PasteSelection()
 							el = len(this.buffer)
 						}
 					}
-				case K_DELETE:
-					if this.DeleteRune() > 0 {
-						el = len(this.buffer)
-					}
-				case K_ESCAPE:
-					exit = true
-				case K_F1:
-					exit = true
-					shouldSave = true
-				case K_RETURN:
-					this.InsertRune('\n')
-					el = len(this.buffer)
-
-				default:
-					if ks.Char != 0 && unicode.IsGraphic(ks.Char) {
-						if this.InsertRune(ks.Char) > 0 {
+				} else {
+					switch ks.Sym {
+					case K_LEFT:
+						this.CursorLeft()
+						updateSel = true
+					case K_RIGHT:
+						this.CursorRight()
+						updateSel = true
+					case K_UP:
+						this.CursorUp()
+						updateSel = true
+					case K_DOWN:
+						this.CursorDown()
+						updateSel = true
+					case K_HOME:
+						this.CursorHome()
+						updateSel = true
+					case K_END:
+						this.CursorEnd()
+						updateSel = true
+					case K_BACKSPACE:
+						if this.CursorLeft() {
+							if this.DeleteRune() > 0 {
+								el = len(this.buffer)
+								this.ClearSelection()
+							}
+						}
+					case K_DELETE:
+						if this.DeleteRune() > 0 {
 							el = len(this.buffer)
+							this.ClearSelection()
+						}
+					case K_ESCAPE:
+						exit = true
+					case K_F1:
+						exit = true
+						shouldSave = true
+					case K_RETURN:
+						this.InsertRune('\n')
+						el = len(this.buffer)
+
+					default:
+						if ks.Char != 0 && unicode.IsGraphic(ks.Char) {
+							if this.InsertRune(ks.Char) > 0 {
+								this.ClearSelection()
+								el = len(this.buffer)
+							}
+						}
+					}
+					if updateSel {
+						if shiftHeld {
+							if this.sx1 == noSelection {
+								this.sx1 = pcx
+								this.sy1 = pcy
+							}
+							this.sx2 = this.x
+							this.sy2 = this.y
+						} else if ks.Mod == 0 && this.sx1 != noSelection {
+							sl = intMin(sl, intMin(this.sy1, this.sy2))
+							el = intMax(el, intMax(this.sy1, this.sy2))
+							this.ClearSelection()
 						}
 					}
 				}
-				this.RenderLines(intMin(sl, this.y), intMax(intMax(sl, el), this.y)+1)
+				this.RenderLines(intMin(sl, this.y)-1, intMax(intMax(sl, el), this.y)+1)
 			}
 		}
 	}
 }
 
+func (this *Editor) ClearSelection() {
+
+	this.sx1 = noSelection
+	this.sy1 = noSelection
+	this.sx2 = noSelection
+	this.sy2 = noSelection
+}
+
+func sortInts(a, b int) (int, int) {
+	if a < b {
+		return a, b
+	}
+	return b, a
+}
+
 func _ed_Edit(frame Frame, parameters []Node) *CallResult {
 
-	names, err := toWordList(parameters[0])
-	if err != nil {
-		return errorResult(err)
-	}
-	ws := frame.workspace()
 	var b bytes.Buffer
+	ws := frame.workspace()
 
-	for _, n := range names {
-		p := ws.findProcedure(strings.ToUpper(n.value))
-		if p == nil {
-			b.WriteString("TO " + n.value + "\n\nEND\n\n")
+	if len(parameters) > 0 {
+		names, err := toWordList(parameters[0])
+		if err != nil {
+			return errorResult(err)
 		}
-		switch ip := p.(type) {
-		case *InterpretedProcedure:
-			b.WriteString(ip.source)
-			b.WriteString("\n\n")
+
+		for _, n := range names {
+			p := ws.findProcedure(strings.ToUpper(n.value))
+			if p == nil {
+				b.WriteString("TO " + n.value + "\n\nEND\n\n")
+			}
+			switch ip := p.(type) {
+			case *InterpretedProcedure:
+				b.WriteString(ip.source)
+				b.WriteString("\n\n")
+			}
 		}
 	}
 
 	editedContent := ws.editor.StartEditor(b.String())
 
-	err = frame.workspace().readString(editedContent)
+	err := frame.workspace().readString(editedContent)
 	if err != nil {
 		return errorResult(err)
 	}

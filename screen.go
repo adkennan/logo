@@ -23,7 +23,7 @@ func initScreen(workspace *Workspace, w, h int) *Screen {
 	w = ss.W()
 	h = ss.H()
 
-	s := &Screen{ss, w, h, workspace, screenModeSplit, workspace.broker.Subscribe()}
+	s := &Screen{ss, w, h, workspace, screenModeSplit, workspace.broker.Subscribe("Screen")}
 
 	workspace.registerBuiltIn("FULLSCREEN", "FS", 0, _s_Fullscreen)
 	workspace.registerBuiltIn("TEXTSCREEN", "TS", 0, _s_Textscreen)
