@@ -124,15 +124,32 @@ func (this *Editor) Insert(content string) (linesInserted int) {
 
 func (this *Editor) DeleteSelection() (linesDeleted int) {
 
-	l := this.buffer[this.sy1][this.sx1:] + this.buffer[this.sy2][:this.sx2]
-	this.buffer[this.sy1] = l
 	s := intMin(this.sy1, this.sy2)
 	e := intMax(this.sy1, this.sy2)
-	linesDeleted = e - s
-	if e > s {
-		this.buffer = append(this.buffer[:this.sy1+1], this.buffer[this.sy2:]...)
+	sl := this.sx1
+	el := this.sx2
+	if this.sy1 == this.sy2 {
+		sl = intMin(this.sx1, this.sx2)
+		el = intMax(this.sx1, this.sx2)
+	} else if this.sy1 > this.sy2 {
+		sl = this.sx2
+		el = this.sx1
 	}
 
+	println("Deleting l", s, ", c", sl, " -> l", e, ", c", el)
+
+	linesDeleted = e - s
+	start := this.buffer[s][:sl]
+	end := this.buffer[e][intMin(len(this.buffer[e]), el+1):]
+	println("Joining [", start, "] and [", end, "]")
+	l := start + end
+	this.buffer[s] = l
+	if e > s {
+		this.buffer = append(this.buffer[:s+1], this.buffer[e:]...)
+	}
+
+	this.x = sl
+	this.y = s
 	this.ClearSelection()
 
 	return
@@ -140,21 +157,22 @@ func (this *Editor) DeleteSelection() (linesDeleted int) {
 
 func (this *Editor) CopySelection() {
 	this.clip = this.GetSelection()
-	println("Copied \"", this.clip, "\"")
 }
 
 func (this *Editor) CutSelection() {
 	this.CopySelection()
 	this.DeleteSelection()
-	println("Cut \"", this.clip, "\"")
 }
 
 func (this *Editor) PasteSelection() int {
 	if len(this.clip) == 0 {
 		return 0
 	}
-	println("Paste \"", this.clip, "\"")
-	return this.Insert(this.clip)
+	linesInserted := 0
+	for _, c := range this.clip {
+		linesInserted += this.InsertRune(c)
+	}
+	return linesInserted
 }
 
 func (this *Editor) GetSelection() string {
@@ -163,20 +181,38 @@ func (this *Editor) GetSelection() string {
 	}
 
 	if this.sy1 == this.sy2 {
-		println("On same line.")
-		return this.buffer[this.sy1][intMin(this.sx1, this.sx2) : intMax(this.sx1, this.sx2)+1]
+		lb := this.buffer[this.sy1]
+		e := intMax(this.sx1, this.sx2) + 1
+		if e > len(lb) {
+			e = len(lb)
+		}
+		return lb[intMin(this.sx1, this.sx2):e]
 	}
 
 	var b bytes.Buffer
 	s := intMin(this.sy1, this.sy2)
 	e := intMax(this.sy1, this.sy2)
+	sl := this.sx1
+	el := this.sx2
+	if this.sy1 == this.sy2 {
+		sl = intMin(this.sx1, this.sx2)
+		el = intMax(this.sx1, this.sx2)
+	} else if this.sy1 > this.sy2 {
+		sl = this.sx2
+		el = this.sx1
+	}
 	lix := e - s
 	for ix, il := range this.buffer[s : e+1] {
 		if ix == 0 {
-			b.WriteString(this.buffer[s][this.sx1:])
+			b.WriteString(this.buffer[s][sl:])
 			b.WriteRune('\n')
 		} else if ix == lix {
-			b.WriteString(this.buffer[s+ix][:this.sx2+1])
+			e := el + 1
+			lb := this.buffer[s+ix]
+			if e > len(lb) {
+				e = len(lb)
+			}
+			b.WriteString(lb[:e])
 		} else {
 			b.WriteString(il)
 			b.WriteRune('\n')
@@ -426,10 +462,8 @@ func (this *Editor) RunEditor() {
 							el = len(this.buffer)
 						}
 					case 'v':
-						if this.HasSelection() {
-							this.PasteSelection()
-							el = len(this.buffer)
-						}
+						this.PasteSelection()
+						el = len(this.buffer)
 					}
 				} else {
 					switch ks.Sym {
