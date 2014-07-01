@@ -61,92 +61,101 @@ func (this *Screen) Update() {
 	gm := this.ws.glyphMap
 	t := this.ws.turtle
 
-	for m := this.channel.Wait(); m != nil; m = this.channel.Wait() {
-		switch rm := m.(type) {
-		case *MessageBase:
-			{
-				switch m.MessageType() {
-				case MT_EditStart:
-					this.setScreenMode(screenModeEdit)
-				case MT_EditStop:
-					this.setScreenMode(screenModeSplit)
-				}
-
-			}
-		case *KeyMessage:
-			if this.screenMode != screenModeEdit {
-				switch rm.Sym {
-				case K_F1:
-					this.setScreenMode(screenModeSplit)
-				case K_F2:
-					this.setScreenMode(screenModeGraphic)
-				case K_F3:
-					this.setScreenMode(screenModeText)
-				}
-			}
-		case *RegionMessage:
-			{
-				switch m.MessageType() {
-				case MT_UpdateEdit:
-					{
-						if this.screenMode != screenModeEdit {
-							continue
-						}
-						for _, r := range rm.regions {
-							this.screen.ClearRect(t.screenColor, r.x, r.y, r.w, r.h)
-							this.screen.DrawSurfacePart(r.x, r.y, rm.surface, r.x, r.y, r.w, r.h)
-						}
-						this.screen.Update()
+	//for m := this.channel.Wait(); m != nil; m = this.channel.Wait() {
+	for {
+		screenDirty := false
+		for m := this.channel.Wait(); m != nil; m = this.channel.Poll() {
+			switch rm := m.(type) {
+			case *MessageBase:
+				{
+					switch m.MessageType() {
+					case MT_EditStart:
+						this.setScreenMode(screenModeEdit)
+						screenDirty = true
+					case MT_EditStop:
+						this.setScreenMode(screenModeSplit)
+						screenDirty = true
 					}
-				case MT_UpdateGfx:
-					{
-						if this.screenMode == screenModeText {
-							continue
-						}
-
-						if this.screenMode == screenModeSplit {
-							th := gm.charHeight * splitScreenSize
-
-							this.screen.SetClipRect(0, 0, this.w, this.h-th)
-						}
-
-						for _, r := range rm.regions {
-							this.screen.ClearRect(t.screenColor, r.x, r.y, r.w, r.h)
-							this.screen.DrawSurfacePart(r.x, r.y, rm.surface, r.x, r.y, r.w, r.h)
-						}
-						if t.turtleState == turtleStateShown {
-							this.DrawTurtle()
-						}
-
-						this.screen.ClearClipRect()
-
-						this.screen.Update()
+				}
+			case *KeyMessage:
+				if this.screenMode != screenModeEdit {
+					switch rm.Sym {
+					case K_F1:
+						this.setScreenMode(screenModeSplit)
+						screenDirty = true
+					case K_F2:
+						this.setScreenMode(screenModeGraphic)
+						screenDirty = true
+					case K_F3:
+						this.setScreenMode(screenModeText)
+						screenDirty = true
 					}
+				}
+			case *RegionMessage:
+				{
+					switch m.MessageType() {
+					case MT_UpdateEdit:
+						{
+							if this.screenMode != screenModeEdit {
+								continue
+							}
+							for _, r := range rm.regions {
+								this.screen.ClearRect(t.screenColor, r.x, r.y, r.w, r.h)
+								this.screen.DrawSurfacePart(r.x, r.y, rm.surface, r.x, r.y, r.w, r.h)
+							}
+							screenDirty = true
+						}
+					case MT_UpdateGfx:
+						{
+							if this.screenMode == screenModeText {
+								continue
+							}
 
-				case MT_UpdateText:
-					{
-						t := this.ws.turtle
+							if this.screenMode == screenModeSplit {
+								th := gm.charHeight * splitScreenSize
 
-						gm := this.ws.glyphMap
-						c := this.ws.console
-						cs := c.Surface()
-						switch this.screenMode {
-						case screenModeText:
-							this.screen.DrawSurface(0, 0, cs)
-							this.screen.Update()
-						case screenModeSplit:
-							th := gm.charHeight * splitScreenSize
+								this.screen.SetClipRect(0, 0, this.w, this.h-th)
+							}
 
-							this.screen.DrawSurfacePart(0, this.h-th, cs,
-								0, (1+c.FirstLineOfSplitScreen())*gm.charHeight, this.w, th)
-
+							for _, r := range rm.regions {
+								this.screen.ClearRect(t.screenColor, r.x, r.y, r.w, r.h)
+								this.screen.DrawSurfacePart(r.x, r.y, rm.surface, r.x, r.y, r.w, r.h)
+							}
 							if t.turtleState == turtleStateShown {
 								this.DrawTurtle()
 							}
-							this.screen.Update()
+
+							this.screen.ClearClipRect()
+							screenDirty = true
+						}
+
+					case MT_UpdateText:
+						{
+							t := this.ws.turtle
+
+							gm := this.ws.glyphMap
+							c := this.ws.console
+							cs := c.Surface()
+							switch this.screenMode {
+							case screenModeText:
+								this.screen.DrawSurface(0, 0, cs)
+							case screenModeSplit:
+								th := gm.charHeight * splitScreenSize
+
+								this.screen.DrawSurfacePart(0, this.h-th, cs,
+									0, (1+c.FirstLineOfSplitScreen())*gm.charHeight, this.w, th)
+
+								if t.turtleState == turtleStateShown {
+									this.DrawTurtle()
+								}
+							}
+							screenDirty = true
 						}
 					}
 				}
+			}
+			if screenDirty {
+				this.screen.Update()
 			}
 		}
 	}

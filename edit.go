@@ -136,16 +136,13 @@ func (this *Editor) DeleteSelection() (linesDeleted int) {
 		el = this.sx1
 	}
 
-	println("Deleting l", s, ", c", sl, " -> l", e, ", c", el)
-
 	linesDeleted = e - s
 	start := this.buffer[s][:sl]
 	end := this.buffer[e][intMin(len(this.buffer[e]), el+1):]
-	println("Joining [", start, "] and [", end, "]")
 	l := start + end
 	this.buffer[s] = l
 	if e > s {
-		this.buffer = append(this.buffer[:s+1], this.buffer[e:]...)
+		this.buffer = append(this.buffer[:s+1], this.buffer[e+1:]...)
 	}
 
 	this.x = sl
@@ -487,13 +484,19 @@ func (this *Editor) RunEditor() {
 						updateSel = true
 					case K_BACKSPACE:
 						if this.CursorLeft() {
-							if this.DeleteRune() > 0 {
+							if this.HasSelection() {
+								this.DeleteSelection()
+								el = len(this.buffer)
+							} else if this.DeleteRune() > 0 {
 								el = len(this.buffer)
 								this.ClearSelection()
 							}
 						}
 					case K_DELETE:
-						if this.DeleteRune() > 0 {
+						if this.HasSelection() {
+							this.DeleteSelection()
+							el = len(this.buffer)
+						} else if this.DeleteRune() > 0 {
 							el = len(this.buffer)
 							this.ClearSelection()
 						}
@@ -503,11 +506,17 @@ func (this *Editor) RunEditor() {
 						exit = true
 						shouldSave = true
 					case K_RETURN:
+						if this.HasSelection() {
+							this.DeleteSelection()
+						}
 						this.InsertRune('\n')
 						el = len(this.buffer)
 
 					default:
 						if ks.Char != 0 && unicode.IsGraphic(ks.Char) {
+							if this.HasSelection() {
+								this.DeleteSelection()
+							}
 							if this.InsertRune(ks.Char) > 0 {
 								this.ClearSelection()
 								el = len(this.buffer)
