@@ -263,7 +263,11 @@ func (this *Region) Overlaps(other *Region) bool {
 	if this.ContainsPoint(other.x, other.y) ||
 		this.ContainsPoint(other.x+other.w, other.y) ||
 		this.ContainsPoint(other.x+other.w, other.y+other.h) ||
-		this.ContainsPoint(other.x, other.y+other.h) {
+		this.ContainsPoint(other.x, other.y+other.h) ||
+		other.ContainsPoint(this.x, this.y) ||
+		other.ContainsPoint(this.x+this.w, this.y) ||
+		other.ContainsPoint(this.x+this.w, this.y+this.h) ||
+		other.ContainsPoint(this.x, this.y+this.h) {
 		return true
 	}
 	return false

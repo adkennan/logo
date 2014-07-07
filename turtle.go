@@ -119,6 +119,10 @@ func (this *Turtle) addDirtyRegion(x1, y1, x2, y2 int) {
 	rx2 := intMax(x1, x2)
 	ry2 := intMax(y1, y2)
 
+	if rx1 == rx2 || ry1 == ry2 {
+		return
+	}
+
 	r := &Region{rx1, ry1, rx2 - rx1, ry2 - ry1}
 
 	this.mutex.Lock()
