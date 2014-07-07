@@ -1,5 +1,7 @@
 package main
 
+import "fmt"
+
 const (
 	screenModeText = iota
 	screenModeSplit
@@ -220,8 +222,8 @@ func (this *Region) Combine(other *Region) {
 
 	x1 := intMin(this.x, other.x)
 	y1 := intMin(this.y, other.y)
-	x2 := intMax(this.x, other.x)
-	y2 := intMax(this.y, other.y)
+	x2 := intMax(this.x+this.w, other.x+other.w)
+	y2 := intMax(this.y+this.h, other.y+other.h)
 
 	this.x = x1
 	this.y = y1
@@ -255,6 +257,24 @@ func (this *Region) ExpandToInclude(x, y int) {
 	} else if y >= this.y+this.h {
 		this.h = (y - this.y) + 1
 	}
+}
+
+func (this *Region) Overlaps(other *Region) bool {
+	if this.ContainsPoint(other.x, other.y) ||
+		this.ContainsPoint(other.x+other.w, other.y) ||
+		this.ContainsPoint(other.x+other.w, other.y+other.h) ||
+		this.ContainsPoint(other.x, other.y+other.h) {
+		return true
+	}
+	return false
+}
+
+func (this *Region) Clone() *Region {
+	return &Region{this.x, this.y, this.w, this.h}
+}
+
+func (this *Region) String() string {
+	return fmt.Sprintf("(%d, %d) -> (%d, %d)", this.x, this.y, this.w, this.h)
 }
 
 func (this *Region) Multiply(v int) {
