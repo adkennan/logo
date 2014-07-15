@@ -119,10 +119,6 @@ func (this *Turtle) addDirtyRegion(x1, y1, x2, y2 int) {
 	rx2 := intMax(x1, x2)
 	ry2 := intMax(y1, y2)
 
-	if rx1 == rx2 || ry1 == ry2 {
-		return
-	}
-
 	r := &Region{rx1, ry1, rx2 - rx1, ry2 - ry1}
 
 	this.mutex.Lock()
@@ -281,6 +277,17 @@ done:
 	return this.denormX(x1), this.denormY(y1)
 }
 
+func (this *Turtle) fill() {
+
+	x := this.normX(int(this.x))
+	y := this.normY(int(this.y))
+
+	this.image.SetColor(this.penColor)
+	x1, y1, x2, y2 := this.image.Flood(x, y)
+
+	this.addDirtyRegion(x1, y1, x2, y2+1)
+}
+
 func (this *Turtle) updateSprite() {
 
 	t := this
@@ -300,7 +307,7 @@ func (this *Turtle) updateSprite() {
 	r.SetColor(turtleColor)
 	r.FillTriangle(x1, y1, x2, y2, x3, y3)
 
-	this.addDirtyRegion(tx-turtleSize, ty-turtleSize, tx+turtleSize, ty+turtleSize)
+	this.addDirtyRegion(tx-turtleSize*2, ty-turtleSize*2, tx+turtleSize*2, ty+turtleSize*2)
 }
 
 func (this *Turtle) refreshTurtle() {
@@ -343,6 +350,7 @@ func initTurtle(ws *Workspace) *Turtle {
 	ws.registerBuiltIn("PENCOLOR", "PC", 0, _t_PenColor)
 	ws.registerBuiltIn("BACKGROUND", "BG", 0, _t_Background)
 	ws.registerBuiltIn("PEN", "", 0, _t_Pen)
+	ws.registerBuiltIn("FILL", "", 0, _t_Fill)
 
 	ws.registerBuiltIn("HEADING", "", 0, _t_Heading)
 	ws.registerBuiltIn("POS", "", 0, _t_Pos)
@@ -863,6 +871,9 @@ func _t_Window(frame Frame, parameters []Node) *CallResult {
 }
 
 func _t_Fill(frame Frame, parameters []Node) *CallResult {
+
+	t := frame.workspace().turtle
+	t.fill()
 	return nil
 }
 

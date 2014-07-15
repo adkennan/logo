@@ -5,11 +5,13 @@ import (
 	"github.com/adkennan/Go-SDL/sdl"
 	"github.com/adkennan/Go-SDL/ttf"
 	"image/color"
+	"path"
 	"unicode/utf16"
 )
 
-var normalFontName string = "res/DejaVuSansMono.ttf"
-var boldFontName string = "res/DejaVuSansMono-Bold.ttf"
+var resourceDir string = "res"
+var normalFontName string = "DejaVuSansMono.ttf"
+var boldFontName string = "DejaVuSansMono-Bold.ttf"
 
 const (
 	glyphStyleNormal  = 0x01
@@ -34,8 +36,8 @@ func initGlyphMap() *GlyphMap {
 	ttf.Init()
 
 	fs := []*ttf.Font{
-		ttf.OpenFont(normalFontName, fontSize),
-		ttf.OpenFont(boldFontName, fontSize)}
+		ttf.OpenFont(path.Join(resourceDir, normalFontName), fontSize),
+		ttf.OpenFont(path.Join(resourceDir, boldFontName), fontSize)}
 
 	gm := &GlyphMap{fs, make(map[int]map[rune]*sdlSurface), fs[0].Height(), 0}
 
@@ -109,6 +111,7 @@ type Surface interface {
 	ColorAt(x, y int) color.Color
 	Fill(x1, y1, x2, y2 int)
 	FillTriangle(x1, y1, x2, y2, x3, y3 int)
+	Flood(x, y int) (minX, minY, maxX, maxY int)
 	Update()
 	W() int
 	H() int
@@ -357,4 +360,103 @@ func (this *sdlSurface) ColorAt(x, y int) color.Color {
 		return color.RGBA{}
 	}
 	return this.s.At(x, y)
+}
+
+type fillNode struct {
+	n    *fillNode
+	x, y int
+}
+
+func colorEqual(c1, c2 color.Color) bool {
+
+	r1, g1, b1, _ := c1.RGBA()
+	r2, g2, b2, _ := c2.RGBA()
+	return r1 == r2 && g1 == g2 && b1 == b2
+}
+
+func (this *sdlSurface) Flood(x, y int) (minX, minY, maxX, maxY int) {
+
+	minX, minY, maxX, maxY = this.w, this.h, 0, 0
+
+	sdlC := toSdlColor(this.s.Format, this.c)
+
+	tc := this.s.At(x, y)
+	if colorEqual(tc, this.c) {
+		return x, y, x, y
+	}
+	q := &fillNode{nil, x, y}
+
+	for q != nil {
+		sx, sy := q.x, q.y
+		q = q.n
+		x2 := sx
+		ux := -1
+		dx := -1
+
+		lc := this.s.At(x2, sy)
+		for x2 >= 0 && colorEqual(lc, tc) {
+			if sy > 0 {
+				uc := this.s.At(x2, sy-1)
+				if colorEqual(uc, tc) {
+					if ux != x2-1 {
+						q = &fillNode{q, x2, sy - 1}
+					}
+					ux = x2
+				}
+			}
+			if sy < this.h-1 {
+				dc := this.s.At(x2, sy+1)
+				if colorEqual(dc, tc) {
+					if dx != x2-1 {
+						q = &fillNode{q, x2, sy + 1}
+					}
+					dx = x2
+				}
+			}
+			x2--
+			lc = this.s.At(x2, sy)
+		}
+		fx := x2
+		x2 = sx + 1
+		ux = -1
+		dx = -1
+		lc = this.s.At(x2, sy)
+		for x2 < this.w-1 && colorEqual(lc, tc) {
+			if sy > 0 {
+				uc := this.s.At(x2, sy-1)
+				if colorEqual(uc, tc) {
+					if ux != x2+1 {
+						q = &fillNode{q, x2, sy - 1}
+					}
+					ux = x2
+				}
+			}
+			if sy < this.h-1 {
+				dc := this.s.At(x2, sy+1)
+				if colorEqual(dc, tc) {
+					if dx != x2+1 {
+						q = &fillNode{q, x2, sy + 1}
+					}
+					dx = x2
+				}
+			}
+			x2++
+			lc = this.s.At(x2, sy)
+		}
+		gfx.LineColor(this.s, int16(fx+1), int16(sy), int16(x2-1), int16(sy), sdlC)
+		if fx < minX {
+			minX = fx
+		}
+		if x2 > maxX {
+			maxX = x2
+		}
+		if sy < minY {
+			minY = sy
+		}
+		if sy > maxY {
+			maxY = sy
+		}
+	}
+
+	return
 }

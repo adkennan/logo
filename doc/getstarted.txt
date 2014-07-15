@@ -1,0 +1,99 @@
+
+Welcome To Logo
+
+When logo starts you will see a black screen with a green triangle in the middle. At the bottom are the words Welcome To Logo. 
+
+Under the welcome is a question mark. This is the *prompt*. When you see the prompt Logo is expecting you to type something in.
+
+The Turtle
+
+The turtle is the green triangle in the middle of the screen. 
+
+You can use the turtle to draw pictures by giving it *commands*. A command is a word followed by *parameters* such as how far to move or turn.
+
+Try this: 
+
+  forward 100<enter>
+
+The turtle will move forward, drawing a line. 
+
+*FORWARD* is the command that makes the turtle move forward. It can be shortened to *FD*. The *100* is the argument that tells the turtle how many steps to move.
+
+Try this:
+
+  back 50<enter>
+
+The turtle will move back half way along the line.
+
+*BACK* is the command that makes the turtle move backward. It can be shortened to *BK*. The *50* is the argument that tells the turtle how many steps to move.
+
+Try this:
+
+  right 90<enter>
+  fd 50<enter>
+
+The turtle will turn to the right and move forward 50 steps.
+
+*RIGHT* is the command that makes the turtle turn to the right. It can be shortened to *RT*. The *90* is the argument that tells the turtle how far to turn.
+
+Try this:
+
+  left 180<enter>
+
+The turtle will turn face back the way it came.
+
+*LEFT* is the command that makes the turtle turn to the left. It can be shortened to *LT*. The *180* is the argument that tells the turtle how far to turn.
+
+Try this:
+
+  fd 100<enter>
+
+The turtle will move foward 100 steps.
+
+Try this:
+
+  rt 135<enter>
+  fd 71<enter>
+  rt 90<enter>
+  fd 71<enter>
+
+The turtle will draw two more lines.
+
+Try this:
+
+  penup<enter>
+  fd 71<enter>
+
+The turtle will move but won't draw a line. 
+
+*PENUP* is the command that tells the turtle to lift the pen. It will not draw a line again until you give it the *PENDOWN* command.
+
+PENUP can be shortened to *PU* and PENDOWN can be shortened to *PD*.
+
+Try this:
+
+  pendown<enter>
+  rt 90<enter>
+  fd 71<enter>
+
+The turtle will draw another line.
+
+Try this:
+ 
+ rt 45 fd 100 rt 45 fd 71 rt 135 fd 200<enter>
+
+You can put more than one command on each line.
+
+What have you drawn?
+
+Commands you have learned:
+
+* FORWARD or FD. Moves the turtle forward.
+* BACK or BK. Moves the turtle backward.
+* RIGHT or RT. Turns the turtle to the right.
+* LEFT or LT. Turns the turtle to the left.
+* PENUP or PU. Lifts the pen so the turtle doesn't draw a line.
+* PENDOWN or PD. Lowers the pen so the turtle draws lines.
+
+
+

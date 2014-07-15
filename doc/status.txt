@@ -41,7 +41,7 @@ DOT
 
 FENCE
 
-FILL ** Not Implemented **
+FILL
 
 PENDOWN (PD)
 
