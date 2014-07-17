@@ -125,7 +125,7 @@ type sdlWindow struct {
 
 func (this *sdlWindow) CreateSurface(w, h int) Surface {
 
-	s := sdl.CreateRGBSurface(sdl.HWSURFACE,
+	s := sdl.CreateRGBSurface(sdl.SWSURFACE,
 		int(w),
 		int(h),
 		32,
@@ -362,9 +362,16 @@ func (this *sdlSurface) ColorAt(x, y int) color.Color {
 	return this.s.At(x, y)
 }
 
+const (
+	fillDirNone = iota
+	fillDirUp
+	fillDirDown
+)
+
 type fillNode struct {
 	n    *fillNode
 	x, y int
+	d    int
 }
 
 func colorEqual(c1, c2 color.Color) bool {
@@ -384,31 +391,33 @@ func (this *sdlSurface) Flood(x, y int) (minX, minY, maxX, maxY int) {
 	if colorEqual(tc, this.c) {
 		return x, y, x, y
 	}
-	q := &fillNode{nil, x, y}
+	q := &fillNode{nil, x, y, fillDirNone}
 
 	for q != nil {
 		sx, sy := q.x, q.y
+		fd := q.d
 		q = q.n
+
 		x2 := sx
 		ux := -1
 		dx := -1
 
 		lc := this.s.At(x2, sy)
 		for x2 >= 0 && colorEqual(lc, tc) {
-			if sy > 0 {
+			if sy > 0 && fd != fillDirUp {
 				uc := this.s.At(x2, sy-1)
 				if colorEqual(uc, tc) {
 					if ux != x2-1 {
-						q = &fillNode{q, x2, sy - 1}
+						q = &fillNode{q, x2, sy - 1, fillDirDown}
 					}
 					ux = x2
 				}
 			}
-			if sy < this.h-1 {
+			if sy < this.h-1 && fd != fillDirDown {
 				dc := this.s.At(x2, sy+1)
 				if colorEqual(dc, tc) {
 					if dx != x2-1 {
-						q = &fillNode{q, x2, sy + 1}
+						q = &fillNode{q, x2, sy + 1, fillDirUp}
 					}
 					dx = x2
 				}
@@ -422,11 +431,11 @@ func (this *sdlSurface) Flood(x, y int) (minX, minY, maxX, maxY int) {
 		dx = -1
 		lc = this.s.At(x2, sy)
 		for x2 < this.w-1 && colorEqual(lc, tc) {
-			if sy > 0 {
+			if sy > 0 && fd != fillDirUp {
 				uc := this.s.At(x2, sy-1)
 				if colorEqual(uc, tc) {
 					if ux != x2+1 {
-						q = &fillNode{q, x2, sy - 1}
+						q = &fillNode{q, x2, sy - 1, fillDirDown}
 					}
 					ux = x2
 				}
@@ -434,8 +443,8 @@ func (this *sdlSurface) Flood(x, y int) (minX, minY, maxX, maxY int) {
 			if sy < this.h-1 {
 				dc := this.s.At(x2, sy+1)
 				if colorEqual(dc, tc) {
-					if dx != x2+1 {
-						q = &fillNode{q, x2, sy + 1}
+					if dx != x2+1 && fd != fillDirDown {
+						q = &fillNode{q, x2, sy + 1, fillDirUp}
 					}
 					dx = x2
 				}
@@ -443,7 +452,9 @@ func (this *sdlSurface) Flood(x, y int) (minX, minY, maxX, maxY int) {
 			x2++
 			lc = this.s.At(x2, sy)
 		}
-		gfx.LineColor(this.s, int16(fx+1), int16(sy), int16(x2-1), int16(sy), sdlC)
+		if fx+1 < x2-1 {
+			gfx.LineColor(this.s, int16(fx+1), int16(sy), int16(x2-1), int16(sy), sdlC)
+		}
 		if fx < minX {
 			minX = fx
 		}
