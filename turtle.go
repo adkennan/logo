@@ -194,6 +194,7 @@ func (this *Turtle) drawLine(x1, y1, x2, y2 int) (int, int) {
 	r := this.image
 	w := this.visW
 	h := this.visH
+
 	r.SetColor(this.penColor)
 	for {
 		switch this.penState {
@@ -284,7 +285,6 @@ func (this *Turtle) fill() {
 
 	this.image.SetColor(this.penColor)
 	x1, y1, x2, y2 := this.image.Flood(x, y)
-
 	this.addDirtyRegion(x1, y1, x2, y2+1)
 }
 
@@ -322,8 +322,8 @@ func initTurtle(ws *Workspace) *Turtle {
 		0, 0, 0, 1.0, turtleStateShown, penStateDown, borderModeWindow,
 		colorWhite, colorBlack, colorWhite, ws, nil, nil, nil, nil, &sync.Mutex{}, 0, 0}
 
-	turtle.sprite = ws.screen.screen.CreateSurface(turtleSize*2, turtleSize*2)
-	turtle.image = ws.screen.screen.CreateSurface(ws.screen.screen.W(), ws.screen.screen.H())
+	turtle.sprite = ws.screen.screen.CreateSurface(turtleSize*2, turtleSize*2, true)
+	turtle.image = ws.screen.screen.CreateSurface(ws.screen.screen.W(), ws.screen.screen.H(), true)
 	turtle.channel = ws.broker.Subscribe("Turtle", MT_VisibleAreaChange)
 	turtle.dirtyRegions = make([]*Region, 0, 16)
 	turtle.updateSprite()
@@ -520,6 +520,7 @@ func _t_ClearScreen(frame Frame, parameters []Node) *CallResult {
 func _t_Home(frame Frame, parameters []Node) *CallResult {
 
 	t := frame.workspace().turtle
+	t.refreshTurtle()
 	t.drawLine(int(t.x), int(t.y), 0, 0)
 
 	t.x = 0

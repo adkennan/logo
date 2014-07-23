@@ -54,8 +54,8 @@ type ConsoleScreen struct {
 
 func initConsole(workspace *Workspace, w, h int) *ConsoleScreen {
 	sfcs := [2]Surface{
-		workspace.screen.screen.CreateSurface(w, h),
-		workspace.screen.screen.CreateSurface(w, h),
+		workspace.screen.screen.CreateSurface(w, h, false),
+		workspace.screen.screen.CreateSurface(w, h, false),
 	}
 	cs := &ConsoleScreen{
 		workspace,

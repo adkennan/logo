@@ -23,7 +23,7 @@ type Editor struct {
 
 func initEditor(ws *Workspace, w, h int) *Editor {
 
-	img := ws.screen.screen.CreateSurface(w, h)
+	img := ws.screen.screen.CreateSurface(w, h, false)
 
 	c := ws.broker.Subscribe("Editor", MT_KeyPress)
 	c.Pause()

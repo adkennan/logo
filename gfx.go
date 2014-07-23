@@ -7,6 +7,7 @@ import (
 	"image/color"
 	"path"
 	"unicode/utf16"
+	"unsafe"
 )
 
 var resourceDir string = "res"
@@ -71,7 +72,7 @@ func (this *GlyphMap) getGlyph(c rune, glyphStyle int) Surface {
 		} else {
 			gs = ttf.RenderUTF8_Shaded(this.fonts[1], s, fgc, bgc)
 		}
-		g = &sdlSurface{gs, int(gs.W), int(gs.H), color.RGBA{0, 0, 0, 0}}
+		g = &sdlSurface{gs, uintptr(unsafe.Pointer(gs.Pixels)), int(gs.W), int(gs.H), color.RGBA{0, 0, 0, 0}, 0}
 		gm[c] = g
 	}
 
@@ -87,7 +88,7 @@ func (this *GlyphMap) renderGlyph(c rune, glyphStyle int, dst Surface, x, y int)
 }
 
 type Window interface {
-	CreateSurface(w, h int) Surface
+	CreateSurface(w, h int, withAlpha bool) Surface
 	DrawSurface(x, y int, sfc Surface)
 	DrawSurfacePart(dx, dy int, sfc Surface, sx, sy, sw, sh int)
 	Clear(c color.Color)
@@ -123,7 +124,12 @@ type sdlWindow struct {
 	w, h int
 }
 
-func (this *sdlWindow) CreateSurface(w, h int) Surface {
+func (this *sdlWindow) CreateSurface(w, h int, withAlpha bool) Surface {
+
+	var a uint32 = 0x000000ff
+	if withAlpha {
+		a = 0x000000ff
+	}
 
 	s := sdl.CreateRGBSurface(sdl.SWSURFACE,
 		int(w),
@@ -132,9 +138,10 @@ func (this *sdlWindow) CreateSurface(w, h int) Surface {
 		0xff000000,
 		0x00ff0000,
 		0x0000ff00,
-		0x000000ff)
+		a)
 
-	return &sdlSurface{s, w, h, color.RGBA{0, 0, 0, 255}}
+	c := color.RGBA{0, 0, 0, 255}
+	return &sdlSurface{s, uintptr(unsafe.Pointer(s.Pixels)), w, h, c, toSdlColor(s.Format, c)}
 }
 
 func (this *sdlWindow) SetClipRect(x, y, w, h int) {
@@ -277,9 +284,23 @@ func newWindow(broker *MessageBroker, ww, wh int) Window {
 }
 
 type sdlSurface struct {
-	s    *sdl.Surface
-	w, h int
-	c    color.Color
+	s      *sdl.Surface
+	pixels uintptr
+	w, h   int
+	c      color.Color
+	sdlCol uint32
+}
+
+func (this *sdlSurface) setPixel(x, y int, c uint32) {
+
+	*((*uint32)(unsafe.Pointer(this.pixels +
+		uintptr((y*this.w+x)*4)))) = c
+}
+
+func (this *sdlSurface) getPixel(x, y int) uint32 {
+
+	return *((*uint32)(unsafe.Pointer(this.pixels +
+		uintptr((y*this.w+x)*4))))
 }
 
 func (this *sdlSurface) W() int {
@@ -315,18 +336,25 @@ func (this *sdlSurface) Clear() {
 
 func (this *sdlSurface) SetColor(c color.Color) {
 	this.c = c
+	this.sdlCol = toSdlColor(this.s.Format, c)
 }
 
 func (this *sdlSurface) DrawLine(x1, y1, x2, y2 int) {
-	gfx.LineColor(this.s, int16(x1), int16(y1), int16(x2), int16(y2), toSdlColor(this.s.Format, this.c))
+	gfx.LineColor(this.s, int16(x1), int16(y1), int16(x2), int16(y2), this.sdlCol)
 }
 
 func (this *sdlSurface) DrawPoint(x, y int) {
-	gfx.PixelColor(this.s, int16(x), int16(y), toSdlColor(this.s.Format, this.c))
+	if x < 0 || x >= this.w || y < 0 || y >= this.h {
+		return
+	}
+	this.setPixel(x, y, this.sdlCol)
 }
 
 func (this *sdlSurface) ErasePoint(x, y int) {
-	gfx.PixelColor(this.s, int16(x), int16(y), 0x000000FF)
+	if x < 0 || x >= this.w || y < 0 || y >= this.h {
+		return
+	}
+	this.setPixel(x, y, 0)
 }
 
 func (this *sdlSurface) ReversePoint(x, y int) {
@@ -338,7 +366,7 @@ func (this *sdlSurface) ReversePoint(x, y int) {
 
 	c := color.RGBA{uint8(r1 ^ r2), uint8(g1 ^ g2), uint8(b1 ^ b2), uint8(a)}
 
-	gfx.PixelColor(this.s, int16(x), int16(y), toSdlColor(this.s.Format, c))
+	this.setPixel(x, y, toSdlColor(this.s.Format, c))
 }
 
 func (this *sdlSurface) Update() {
@@ -359,19 +387,15 @@ func (this *sdlSurface) ColorAt(x, y int) color.Color {
 	if x < 0 || x >= this.w || y < 0 || y >= this.h {
 		return color.RGBA{}
 	}
-	return this.s.At(x, y)
+	sdlCol := this.getPixel(x, y)
+	var r, g, b, a uint8
+	sdl.GetRGBA(sdlCol, this.s.Format, &r, &g, &b, &a)
+	return color.RGBA{r, g, b, a}
 }
-
-const (
-	fillDirNone = iota
-	fillDirUp
-	fillDirDown
-)
 
 type fillNode struct {
 	n    *fillNode
 	x, y int
-	d    int
 }
 
 func colorEqual(c1, c2 color.Color) bool {
@@ -385,87 +409,71 @@ func (this *sdlSurface) Flood(x, y int) (minX, minY, maxX, maxY int) {
 
 	minX, minY, maxX, maxY = this.w, this.h, 0, 0
 
-	sdlC := toSdlColor(this.s.Format, this.c)
-
-	tc := this.s.At(x, y)
-	if colorEqual(tc, this.c) {
+	tc := this.getPixel(x, y)
+	if tc == this.sdlCol {
 		return x, y, x, y
 	}
-	q := &fillNode{nil, x, y, fillDirNone}
 
+	sweep := uintptr(this.w * 4)
+
+	q := &fillNode{nil, x, y}
 	for q != nil {
 		sx, sy := q.x, q.y
-		fd := q.d
+		p := this.pixels + uintptr((sy*this.w+sx)*4)
 		q = q.n
 
-		x2 := sx
+		x1 := sx
+
+		lc := *(*uint32)(unsafe.Pointer(p))
+		for x1 > 0 && lc == tc {
+			x1--
+			p -= uintptr(4)
+			lc = *(*uint32)(unsafe.Pointer(p))
+		}
+
+		x2 := x1 + 1
+		p += uintptr(4)
 		ux := -1
 		dx := -1
-
-		lc := this.s.At(x2, sy)
-		for x2 >= 0 && colorEqual(lc, tc) {
-			if sy > 0 && fd != fillDirUp {
-				uc := this.s.At(x2, sy-1)
-				if colorEqual(uc, tc) {
+		lc = *(*uint32)(unsafe.Pointer(p))
+		for x2 < this.w-1 && lc == tc {
+			if sy > 0 {
+				uc := *(*uint32)(unsafe.Pointer(p - sweep))
+				if uc == tc {
 					if ux != x2-1 {
-						q = &fillNode{q, x2, sy - 1, fillDirDown}
-					}
-					ux = x2
-				}
-			}
-			if sy < this.h-1 && fd != fillDirDown {
-				dc := this.s.At(x2, sy+1)
-				if colorEqual(dc, tc) {
-					if dx != x2-1 {
-						q = &fillNode{q, x2, sy + 1, fillDirUp}
-					}
-					dx = x2
-				}
-			}
-			x2--
-			lc = this.s.At(x2, sy)
-		}
-		fx := x2
-		x2 = sx + 1
-		ux = -1
-		dx = -1
-		lc = this.s.At(x2, sy)
-		for x2 < this.w-1 && colorEqual(lc, tc) {
-			if sy > 0 && fd != fillDirUp {
-				uc := this.s.At(x2, sy-1)
-				if colorEqual(uc, tc) {
-					if ux != x2+1 {
-						q = &fillNode{q, x2, sy - 1, fillDirDown}
+						q = &fillNode{q, x2, sy - 1}
 					}
 					ux = x2
 				}
 			}
 			if sy < this.h-1 {
-				dc := this.s.At(x2, sy+1)
-				if colorEqual(dc, tc) {
-					if dx != x2+1 && fd != fillDirDown {
-						q = &fillNode{q, x2, sy + 1, fillDirUp}
+				dc := *(*uint32)(unsafe.Pointer(p + sweep))
+				if dc == tc {
+					if dx != x2-1 {
+						q = &fillNode{q, x2, sy + 1}
 					}
 					dx = x2
 				}
 			}
+			*(*uint32)(unsafe.Pointer(p)) = this.sdlCol
+			p += uintptr(4)
 			x2++
-			lc = this.s.At(x2, sy)
+			lc = *(*uint32)(unsafe.Pointer(p))
 		}
-		if fx+1 < x2-1 {
-			gfx.LineColor(this.s, int16(fx+1), int16(sy), int16(x2-1), int16(sy), sdlC)
-		}
-		if fx < minX {
-			minX = fx
-		}
-		if x2 > maxX {
-			maxX = x2
-		}
-		if sy < minY {
-			minY = sy
-		}
-		if sy > maxY {
-			maxY = sy
+
+		if x1+1 < x2-1 {
+			if x1 < minX {
+				minX = x1
+			}
+			if x2 > maxX {
+				maxX = x2
+			}
+			if sy < minY {
+				minY = sy
+			}
+			if sy > maxY {
+				maxY = sy
+			}
 		}
 	}
 
