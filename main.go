@@ -4,27 +4,13 @@ import (
 	"flag"
 	"os"
 	"runtime/pprof"
-	"strconv"
 )
 
 func main() {
 
 	cpuprofile := flag.String("cpuprofile", "", "write profiling info to file.")
-
-	w := 0
-	h := 0
-
-	if len(os.Args) == 3 {
-		var err error
-		w, err = strconv.Atoi(os.Args[1])
-		if err != nil {
-			panic(err)
-		}
-		h, err = strconv.Atoi(os.Args[2])
-		if err != nil {
-			panic(err)
-		}
-	}
+	w := flag.Int("w", 0, "screen width.")
+	h := flag.Int("h", 0, "screen height.")
 
 	flag.Parse()
 	if *cpuprofile != "" {
@@ -36,7 +22,7 @@ func main() {
 		defer pprof.StopCPUProfile()
 	}
 
-	ws := CreateWorkspace(w, h)
-
+	ws := CreateWorkspace()
+	ws.OpenScreen(*w, *h)
 	ws.RunInterpreter()
 }

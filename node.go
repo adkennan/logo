@@ -35,7 +35,6 @@ type WordNode struct {
 	BaseNode
 	value          string
 	isLiteral      bool
-	isInfix        bool
 	isFirstOfGroup bool
 }
 
@@ -65,7 +64,6 @@ func (this *WordNode) String() string {
 
 func (this *WordNode) clone() Node {
 	n := newWordNode(this.line, this.col, this.value, this.isLiteral)
-	n.isInfix = this.isInfix
 	n.isFirstOfGroup = this.isFirstOfGroup
 	return n
 }

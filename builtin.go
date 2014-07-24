@@ -222,9 +222,6 @@ func _bi_Difference(frame Frame, parameters []Node) *CallResult {
 		return errorResult(err)
 	}
 
-	if frame.caller().isInfix {
-		return returnResult(createNumericNode(y - x))
-	}
 	return returnResult(createNumericNode(x - y))
 }
 
@@ -251,13 +248,6 @@ func _bi_Quotient(frame Frame, parameters []Node) *CallResult {
 	x, y, err := evalNumericParams(parameters[0], parameters[1])
 	if err != nil {
 		return errorResult(err)
-	}
-
-	if frame.caller().isInfix {
-		if x == 0 {
-			return errorResult(errorAttemptToDivideByZero(parameters[0]))
-		}
-		return returnResult(createNumericNode(y / x))
 	}
 
 	if y == 0 {
@@ -402,9 +392,7 @@ func _bi_Greaterp(frame Frame, parameters []Node) *CallResult {
 	nx, ex := evalToNumber(parameters[0])
 	ny, ey := evalToNumber(parameters[1])
 
-	infix := frame.caller().isInfix
-
-	if ex == nil && ey == nil && ((infix && nx < ny) || (!infix && nx > ny)) {
+	if ex == nil && ey == nil && nx > ny {
 		return returnResult(trueNode)
 	}
 	return returnResult(falseNode)
@@ -415,9 +403,7 @@ func _bi_Lessp(frame Frame, parameters []Node) *CallResult {
 	nx, ex := evalToNumber(parameters[0])
 	ny, ey := evalToNumber(parameters[1])
 
-	infix := frame.caller().isInfix
-
-	if ex == nil && ey == nil && ((infix && nx > ny) || (!infix && nx < ny)) {
+	if ex == nil && ey == nil && nx < ny {
 		return returnResult(trueNode)
 	}
 	return returnResult(falseNode)
@@ -428,9 +414,7 @@ func _bi_GreaterEqualp(frame Frame, parameters []Node) *CallResult {
 	nx, ex := evalToNumber(parameters[0])
 	ny, ey := evalToNumber(parameters[1])
 
-	infix := frame.caller().isInfix
-
-	if ex == nil && ey == nil && ((infix && nx <= ny) || (!infix && nx >= ny)) {
+	if ex == nil && ey == nil && nx >= ny {
 		return returnResult(trueNode)
 	}
 	return returnResult(falseNode)
@@ -441,9 +425,7 @@ func _bi_LessEqualp(frame Frame, parameters []Node) *CallResult {
 	nx, ex := evalToNumber(parameters[0])
 	ny, ey := evalToNumber(parameters[1])
 
-	infix := frame.caller().isInfix
-
-	if ex == nil && ey == nil && ((infix && nx >= ny) || (!infix && nx <= ny)) {
+	if ex == nil && ey == nil && nx <= ny {
 		return returnResult(trueNode)
 	}
 	return returnResult(falseNode)

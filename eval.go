@@ -90,6 +90,32 @@ func callProcedure(frame Frame, node Node, withInfix bool) (*CallResult, Node) {
 	return rv, node
 }
 
+func callProcedureWithParams(frame Frame, wn *WordNode, parameters ...Node) *CallResult {
+
+	procName := strings.ToUpper(wn.value)
+
+	proc := frame.workspace().findProcedure(procName)
+
+	if proc == nil {
+		return errorResult(errorProcedureNotFound(wn, wn.value))
+	}
+
+	subFrame := proc.createFrame(frame, wn)
+	frame.workspace().currentFrame = subFrame
+	defer func() {
+		frame.workspace().currentFrame = frame
+	}()
+
+	rv := subFrame.eval(parameters)
+
+	if rv != nil {
+		if rv.hasError() {
+			return rv
+		}
+	}
+	return rv
+}
+
 func fetchParameters(frame Frame, caller *WordNode, procName string, firstNode Node, paramCount int, withInfix bool) ([]Node, Node, error) {
 
 	var params []Node
@@ -209,7 +235,6 @@ func evaluateExpression(frame Frame, n Node) (*CallResult, Node) {
 					}
 
 					nwn := createNumericNode(0.0 - v).(*WordNode)
-					nwn.isInfix = true
 					nl = append(nl, nwn)
 					expectOp = true
 				} else {
@@ -222,8 +247,19 @@ func evaluateExpression(frame Frame, n Node) (*CallResult, Node) {
 							procName := infixProc[popIx]
 							if procName != "" {
 								nwn := newWordNode(l, c, procName, false)
-								nwn.isInfix = true
-								nl = append(nl, nwn)
+								nlc := len(nl)
+								if nlc < 2 {
+									return errorResult(errorNotEnoughParameters(nwn, nwn)), nil
+								}
+								rv := callProcedureWithParams(frame, nwn, nl[nlc-2], nl[nlc-1])
+								if rv != nil {
+									if rv.shouldStop() {
+										return rv, nil
+									}
+									if rv.returnValue != nil {
+										nl = append(nl[0:nlc-2], rv.returnValue)
+									}
+								}
 							}
 							ops = ops[0 : len(ops)-1]
 							if len(ops) == 0 {
@@ -248,12 +284,12 @@ func evaluateExpression(frame Frame, n Node) (*CallResult, Node) {
 							return rv, nil
 						}
 						if rv.returnValue != nil {
-							nl = append(nl, rv.returnValue.clone())
+							nl = append(nl, rv.returnValue)
 							expectOp = true
 						}
 					}
 				} else {
-					nl = append(nl, nn.clone())
+					nl = append(nl, nn)
 					n = n.next()
 					expectOp = true
 				}
@@ -272,8 +308,19 @@ func evaluateExpression(frame Frame, n Node) (*CallResult, Node) {
 		procName := infixProc[popIx]
 		if procName != "" {
 			nwn := newWordNode(-1, -1, procName, false)
-			nwn.isInfix = true
-			nl = append(nl, nwn)
+			nlc := len(nl)
+			if nlc < 2 {
+				return errorResult(errorNotEnoughParameters(nwn, nwn)), nil
+			}
+			rv := callProcedureWithParams(frame, nwn, nl[nlc-2], nl[nlc-1])
+			if rv != nil {
+				if rv.shouldStop() {
+					return rv, nil
+				}
+				if rv.returnValue != nil {
+					nl = append(nl[0:nlc-2], rv.returnValue)
+				}
+			}
 		}
 		ops = ops[0 : len(ops)-1]
 	}
@@ -281,26 +328,8 @@ func evaluateExpression(frame Frame, n Node) (*CallResult, Node) {
 	var rv *CallResult
 	if len(nl) == 1 {
 		rv, _ = evaluateNode(frame, nl[0], false)
-	} else if len(nl) > 1 {
-
-		ix := len(nl) - 1
-		fn := nl[ix]
-		nn := fn
-		ix--
-		for ix >= 0 {
-			nn.addNode(nl[ix])
-			nn = nn.next()
-			ix--
-		}
-
-		rv, _ = evaluateNode(frame, fn, false)
-	}
-	if rv != nil {
 		if rv.shouldStop() {
 			return rv, nil
-		}
-		if rv.returnValue != nil {
-			rv.returnValue.addNode(n)
 		}
 	}
 	return rv, n

@@ -28,7 +28,8 @@ type Workspace struct {
 	currentFrame Frame
 }
 
-func CreateWorkspace(w, h int) *Workspace {
+func CreateWorkspace() *Workspace {
+
 	u, err := user.Current()
 	if err != nil {
 		panic(err)
@@ -40,21 +41,24 @@ func CreateWorkspace(w, h int) *Workspace {
 	ws.files = CreateFiles(path.Join(u.HomeDir, "logo"))
 	registerBuiltInProcedures(ws)
 
-	ws.screen = initScreen(ws, w, h)
-	ws.turtle = initTurtle(ws)
-	ws.glyphMap = initGlyphMap()
-	ws.console = initConsole(ws, ws.screen.screen.W(), ws.screen.screen.H())
-	ws.editor = initEditor(ws, ws.screen.screen.W(), ws.screen.screen.H())
-
-	ws.files.defaultFile = ws.console
-	ws.files.writer = ws.console
-	ws.files.reader = ws.console
-
-	ws.screen.Open()
-
 	go ws.listen()
 
 	return ws
+}
+
+func (this *Workspace) OpenScreen(w, h int) {
+
+	this.screen = initScreen(this, w, h)
+	this.turtle = initTurtle(this)
+	this.glyphMap = initGlyphMap()
+	this.console = initConsole(this, this.screen.screen.W(), this.screen.screen.H())
+	this.editor = initEditor(this, this.screen.screen.W(), this.screen.screen.H())
+
+	this.files.defaultFile = this.console
+	this.files.writer = this.console
+	this.files.reader = this.console
+
+	this.screen.Open()
 }
 
 func (this *Workspace) listen() {
