@@ -68,7 +68,7 @@ const dToR float64 = math.Pi / 180.0
 type Turtle struct {
 	x, y         float64
 	d            float64
-	renderedD    float64
+	renderedD    int
 	scale        float64
 	turtleState  int
 	penState     int
@@ -365,7 +365,7 @@ func (this *Turtle) updateSprite() {
 	r.FillTriangle(x1, y1, x2, y2, x3, y3)
 
 	this.addDirtyRegion(tx-turtleSize*2, ty-turtleSize*2, tx+turtleSize*2, ty+turtleSize*2)
-	this.renderedD = d
+	this.renderedD = int(d)
 }
 
 func (this *Turtle) refreshTurtle() {
@@ -377,7 +377,7 @@ func (this *Turtle) refreshTurtle() {
 
 func (this *Turtle) spriteNeedsUpdate() bool {
 
-	return this.d != this.renderedD
+	return int(this.d) != this.renderedD
 }
 
 func normAngle(d float64) float64 {
