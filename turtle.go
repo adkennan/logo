@@ -365,7 +365,7 @@ func (this *Turtle) updateSprite() {
 	r.FillTriangle(x1, y1, x2, y2, x3, y3)
 
 	this.addDirtyRegion(tx-turtleSize*2, ty-turtleSize*2, tx+turtleSize*2, ty+turtleSize*2)
-	this.renderedD = int(d)
+	this.renderedD = int(this.d)
 }
 
 func (this *Turtle) refreshTurtle() {
