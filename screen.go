@@ -165,6 +165,11 @@ func (this *Screen) Update() {
 
 func (this *Screen) DrawTurtle() {
 	t := this.ws.turtle
+
+	if t.spriteNeedsUpdate() {
+		t.updateSprite()
+	}
+
 	x := int(t.x+float64(this.w/2)) - turtleSize
 	y := int(-t.y+float64(this.h/2)) - turtleSize
 

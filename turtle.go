@@ -68,6 +68,7 @@ const dToR float64 = math.Pi / 180.0
 type Turtle struct {
 	x, y         float64
 	d            float64
+	renderedD    float64
 	scale        float64
 	turtleState  int
 	penState     int
@@ -83,6 +84,62 @@ type Turtle struct {
 	mutex        *sync.Mutex
 	visW         int
 	visH         int
+}
+
+func initTurtle(ws *Workspace) *Turtle {
+	turtle := &Turtle{
+		0, 0, 0, -1, 1.0, turtleStateShown, penStateDown, borderModeWindow,
+		colorWhite, colorBlack, colorWhite, ws, nil, nil, nil, nil, &sync.Mutex{}, 0, 0}
+
+	turtle.sprite = ws.screen.screen.CreateSurface(turtleSize*2, turtleSize*2, true)
+	turtle.image = ws.screen.screen.CreateSurface(ws.screen.screen.W(), ws.screen.screen.H(), true)
+	turtle.channel = ws.broker.Subscribe("Turtle", MT_VisibleAreaChange)
+	turtle.dirtyRegions = make([]*Region, 0, 16)
+
+	ws.registerBuiltIn("FORWARD", "FD", 1, _t_Forward)
+	ws.registerBuiltIn("BACK", "BK", 1, _t_Back)
+	ws.registerBuiltIn("RIGHT", "RT", 1, _t_Right)
+	ws.registerBuiltIn("LEFT", "LT", 1, _t_Left)
+
+	ws.registerBuiltIn("CLEARSCREEN", "CS", 0, _t_ClearScreen)
+	ws.registerBuiltIn("HOME", "", 0, _t_Home)
+	ws.registerBuiltIn("SETPOS", "", 1, _t_SetPos)
+	ws.registerBuiltIn("SETHEADING", "SETH", 1, _t_SetHeading)
+	ws.registerBuiltIn("SETX", "", 1, _t_SetX)
+	ws.registerBuiltIn("SETY", "", 1, _t_SetY)
+	ws.registerBuiltIn("SHOWTURTLE", "ST", 0, _t_ShowTurtle)
+	ws.registerBuiltIn("HIDETURTLE", "HT", 0, _t_HideTurtle)
+	ws.registerBuiltIn("PENUP", "PU", 0, _t_PenUp)
+	ws.registerBuiltIn("PENDOWN", "PD", 0, _t_PenDown)
+	ws.registerBuiltIn("PENERASE", "PE", 0, _t_PenErase)
+	ws.registerBuiltIn("PENREVERSE", "PX", 0, _t_PenReverse)
+	ws.registerBuiltIn("SETPC", "", 1, _t_SetPc)
+	ws.registerBuiltIn("SETBG", "", 1, _t_SetBg)
+	ws.registerBuiltIn("PENCOLOR", "PC", 0, _t_PenColor)
+	ws.registerBuiltIn("BACKGROUND", "BG", 0, _t_Background)
+	ws.registerBuiltIn("PEN", "", 0, _t_Pen)
+	ws.registerBuiltIn("FILL", "", 0, _t_Fill)
+
+	ws.registerBuiltIn("HEADING", "", 0, _t_Heading)
+	ws.registerBuiltIn("POS", "", 0, _t_Pos)
+	ws.registerBuiltIn("SHOWNP", "", 0, _t_Shownp)
+	ws.registerBuiltIn("TOWARDS", "", 1, _t_Towards)
+	ws.registerBuiltIn("XCOR", "", 0, _t_XCor)
+	ws.registerBuiltIn("YCOR", "", 0, _t_YCor)
+	ws.registerBuiltIn("TEXT", "", 3, _t_Text)
+
+	ws.registerBuiltIn("CLEAN", "", 0, _t_Clean)
+	ws.registerBuiltIn("DOT", "", 1, _t_Dot)
+	ws.registerBuiltIn("DOTP", "", 1, _t_Dotp)
+
+	ws.registerBuiltIn("WINDOW", "", 0, _t_Window)
+	ws.registerBuiltIn("WRAP", "", 0, _t_Wrap)
+	ws.registerBuiltIn("FENCE", "", 0, _t_Fence)
+
+	go turtle.listen()
+	go turtle.tick()
+
+	return turtle
 }
 
 func (this *Turtle) normX(x int) int {
@@ -308,6 +365,7 @@ func (this *Turtle) updateSprite() {
 	r.FillTriangle(x1, y1, x2, y2, x3, y3)
 
 	this.addDirtyRegion(tx-turtleSize*2, ty-turtleSize*2, tx+turtleSize*2, ty+turtleSize*2)
+	this.renderedD = d
 }
 
 func (this *Turtle) refreshTurtle() {
@@ -317,61 +375,9 @@ func (this *Turtle) refreshTurtle() {
 	this.addDirtyRegion(tx-turtleSize, ty-turtleSize, tx+turtleSize, ty+turtleSize)
 }
 
-func initTurtle(ws *Workspace) *Turtle {
-	turtle := &Turtle{
-		0, 0, 0, 1.0, turtleStateShown, penStateDown, borderModeWindow,
-		colorWhite, colorBlack, colorWhite, ws, nil, nil, nil, nil, &sync.Mutex{}, 0, 0}
+func (this *Turtle) spriteNeedsUpdate() bool {
 
-	turtle.sprite = ws.screen.screen.CreateSurface(turtleSize*2, turtleSize*2, true)
-	turtle.image = ws.screen.screen.CreateSurface(ws.screen.screen.W(), ws.screen.screen.H(), true)
-	turtle.channel = ws.broker.Subscribe("Turtle", MT_VisibleAreaChange)
-	turtle.dirtyRegions = make([]*Region, 0, 16)
-	turtle.updateSprite()
-
-	ws.registerBuiltIn("FORWARD", "FD", 1, _t_Forward)
-	ws.registerBuiltIn("BACK", "BK", 1, _t_Back)
-	ws.registerBuiltIn("RIGHT", "RT", 1, _t_Right)
-	ws.registerBuiltIn("LEFT", "LT", 1, _t_Left)
-
-	ws.registerBuiltIn("CLEARSCREEN", "CS", 0, _t_ClearScreen)
-	ws.registerBuiltIn("HOME", "", 0, _t_Home)
-	ws.registerBuiltIn("SETPOS", "", 1, _t_SetPos)
-	ws.registerBuiltIn("SETHEADING", "SETH", 1, _t_SetHeading)
-	ws.registerBuiltIn("SETX", "", 1, _t_SetX)
-	ws.registerBuiltIn("SETY", "", 1, _t_SetY)
-	ws.registerBuiltIn("SHOWTURTLE", "ST", 0, _t_ShowTurtle)
-	ws.registerBuiltIn("HIDETURTLE", "HT", 0, _t_HideTurtle)
-	ws.registerBuiltIn("PENUP", "PU", 0, _t_PenUp)
-	ws.registerBuiltIn("PENDOWN", "PD", 0, _t_PenDown)
-	ws.registerBuiltIn("PENERASE", "PE", 0, _t_PenErase)
-	ws.registerBuiltIn("PENREVERSE", "PX", 0, _t_PenReverse)
-	ws.registerBuiltIn("SETPC", "", 1, _t_SetPc)
-	ws.registerBuiltIn("SETBG", "", 1, _t_SetBg)
-	ws.registerBuiltIn("PENCOLOR", "PC", 0, _t_PenColor)
-	ws.registerBuiltIn("BACKGROUND", "BG", 0, _t_Background)
-	ws.registerBuiltIn("PEN", "", 0, _t_Pen)
-	ws.registerBuiltIn("FILL", "", 0, _t_Fill)
-
-	ws.registerBuiltIn("HEADING", "", 0, _t_Heading)
-	ws.registerBuiltIn("POS", "", 0, _t_Pos)
-	ws.registerBuiltIn("SHOWNP", "", 0, _t_Shownp)
-	ws.registerBuiltIn("TOWARDS", "", 1, _t_Towards)
-	ws.registerBuiltIn("XCOR", "", 0, _t_XCor)
-	ws.registerBuiltIn("YCOR", "", 0, _t_YCor)
-	ws.registerBuiltIn("TEXT", "", 3, _t_Text)
-
-	ws.registerBuiltIn("CLEAN", "", 0, _t_Clean)
-	ws.registerBuiltIn("DOT", "", 1, _t_Dot)
-	ws.registerBuiltIn("DOTP", "", 1, _t_Dotp)
-
-	ws.registerBuiltIn("WINDOW", "", 0, _t_Window)
-	ws.registerBuiltIn("WRAP", "", 0, _t_Wrap)
-	ws.registerBuiltIn("FENCE", "", 0, _t_Fence)
-
-	go turtle.listen()
-	go turtle.tick()
-
-	return turtle
+	return this.d != this.renderedD
 }
 
 func normAngle(d float64) float64 {
@@ -455,8 +461,6 @@ func _t_Left(frame Frame, parameters []Node) *CallResult {
 		t.d += 360
 	}
 
-	t.updateSprite()
-
 	return nil
 }
 
@@ -472,8 +476,6 @@ func _t_Right(frame Frame, parameters []Node) *CallResult {
 	for t.d >= 360 {
 		t.d -= 360
 	}
-
-	t.updateSprite()
 
 	return nil
 }
@@ -527,8 +529,6 @@ func _t_Home(frame Frame, parameters []Node) *CallResult {
 	t.y = 0
 	t.d = 0
 
-	t.updateSprite()
-
 	return nil
 }
 
@@ -544,8 +544,6 @@ func _t_SetHeading(frame Frame, parameters []Node) *CallResult {
 	for t.d >= 360 {
 		t.d -= 360
 	}
-
-	t.updateSprite()
 
 	return nil
 
