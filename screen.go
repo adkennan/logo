@@ -66,6 +66,7 @@ func (this *Screen) Update() {
 	//for m := this.channel.Wait(); m != nil; m = this.channel.Wait() {
 	for {
 		screenDirty := false
+		drawTurtle := false
 		for m := this.channel.Wait(); m != nil; m = this.channel.Poll() {
 			switch rm := m.(type) {
 			case *MessageBase:
@@ -124,7 +125,7 @@ func (this *Screen) Update() {
 								this.screen.DrawSurfacePart(r.x, r.y, rm.surface, r.x, r.y, r.w, r.h)
 							}
 							if t.turtleState == turtleStateShown {
-								this.DrawTurtle()
+								drawTurtle = true
 							}
 
 							this.screen.ClearClipRect()
@@ -148,7 +149,7 @@ func (this *Screen) Update() {
 									0, (1+c.FirstLineOfSplitScreen())*gm.charHeight, this.w, th)
 
 								if t.turtleState == turtleStateShown {
-									this.DrawTurtle()
+									drawTurtle = true
 								}
 							}
 							screenDirty = true
@@ -157,6 +158,9 @@ func (this *Screen) Update() {
 				}
 			}
 			if screenDirty {
+				if drawTurtle {
+					this.DrawTurtle()
+				}
 				this.screen.Update()
 			}
 		}
@@ -315,9 +319,7 @@ func newVisibleAreaChangeMessage(w, h int) *VisibleAreaChangeMessage {
 func _s_Fullscreen(frame Frame, parameters []Node) *CallResult {
 
 	ws := frame.workspace()
-	ws.screen.screenMode = screenModeGraphic
-
-	ws.screen.Invalidate(MT_UpdateGfx)
+	ws.screen.setScreenMode(screenModeGraphic)
 
 	return nil
 }
@@ -325,9 +327,7 @@ func _s_Fullscreen(frame Frame, parameters []Node) *CallResult {
 func _s_Textscreen(frame Frame, parameters []Node) *CallResult {
 
 	ws := frame.workspace()
-	ws.screen.screenMode = screenModeText
-
-	ws.screen.Invalidate(MT_UpdateText)
+	ws.screen.setScreenMode(screenModeText)
 
 	return nil
 }
@@ -335,10 +335,7 @@ func _s_Textscreen(frame Frame, parameters []Node) *CallResult {
 func _s_Splitscreen(frame Frame, parameters []Node) *CallResult {
 
 	ws := frame.workspace()
-	ws.screen.screenMode = screenModeSplit
-
-	ws.screen.Invalidate(MT_UpdateGfx)
-	ws.screen.Invalidate(MT_UpdateText)
+	ws.screen.setScreenMode(screenModeSplit)
 
 	return nil
 }
