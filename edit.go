@@ -434,8 +434,8 @@ func (this *Editor) RunEditor() {
 	}()
 
 	exit := false
-	m := this.channel.Wait()
-	for ; m != nil && !exit; m = this.channel.Wait() {
+	for !exit {
+		m := this.channel.Wait()
 		sl := this.y
 		el := -1
 		switch ks := m.(type) {

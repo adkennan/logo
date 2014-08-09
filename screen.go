@@ -63,7 +63,6 @@ func (this *Screen) Update() {
 	gm := this.ws.glyphMap
 	t := this.ws.turtle
 
-	//for m := this.channel.Wait(); m != nil; m = this.channel.Wait() {
 	for {
 		screenDirty := false
 		drawTurtle := false
