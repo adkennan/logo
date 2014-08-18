@@ -1135,6 +1135,52 @@ func _bi_Untrace(frame Frame, parameters []Node) *CallResult {
 	return nil
 }
 
+func _bi_Step(frame Frame, parameters []Node) *CallResult {
+
+	names, err := toWordList(parameters[0])
+	if err != nil {
+		return errorResult(err)
+	}
+	ws := frame.workspace()
+	for _, n := range names {
+		p := ws.findProcedure(strings.ToUpper(n.value))
+		if p == nil {
+			return errorResult(errorProcedureNotFound(n, n.value))
+		}
+		switch ip := p.(type) {
+		case *InterpretedProcedure:
+			ip.step = true
+		default:
+			return errorResult(errorProcIsBuiltIn(n, n.value))
+		}
+	}
+
+	return nil
+}
+
+func _bi_Unstep(frame Frame, parameters []Node) *CallResult {
+
+	names, err := toWordList(parameters[0])
+	if err != nil {
+		return errorResult(err)
+	}
+	ws := frame.workspace()
+	for _, n := range names {
+		p := ws.findProcedure(strings.ToUpper(n.value))
+		if p == nil {
+			return errorResult(errorProcedureNotFound(n, n.value))
+		}
+		switch ip := p.(type) {
+		case *InterpretedProcedure:
+			ip.step = false
+		default:
+			return errorResult(errorProcIsBuiltIn(n, n.value))
+		}
+	}
+
+	return nil
+}
+
 func _bi_Wait(frame Frame, parameters []Node) *CallResult {
 
 	fs, err := evalToNumber(parameters[0])
@@ -1902,6 +1948,8 @@ func registerBuiltInProcedures(workspace *Workspace) {
 
 	workspace.registerBuiltIn("TRACE", "", 0, _bi_Trace)
 	workspace.registerBuiltIn("UNTRACE", "", 0, _bi_Untrace)
+	workspace.registerBuiltIn("STEP", "", 1, _bi_Step)
+	workspace.registerBuiltIn("UNSTEP", "", 1, _bi_Unstep)
 	workspace.registerBuiltIn("GOODBYE", "BYE", 0, _bi_Goodbye)
 	workspace.registerBuiltIn("WAIT", "", 1, _bi_Wait)
 

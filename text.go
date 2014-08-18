@@ -114,6 +114,8 @@ func (this *ConsoleScreen) Clear() {
 
 func (this *ConsoleScreen) ReadChar() (rune, error) {
 
+	this.channel.Resume()
+	defer this.channel.Pause()
 	m := this.channel.Wait()
 	switch ks := m.(type) {
 	case *KeyMessage:

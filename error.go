@@ -123,3 +123,7 @@ func errorAttemptToDivideByZero(node Node) error {
 func errorLabelNotFound(node Node, name string) error {
 	return toError(26, node, "Label "+name+" not found.")
 }
+
+func errorProcIsBuiltIn(node Node, name string) error {
+	return toError(27, node, "Procedure "+name+"is built in.")
+}

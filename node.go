@@ -15,6 +15,43 @@ const (
 	Group
 )
 
+type NodeEnumerator struct {
+	nodes []Node
+	c     Node
+}
+
+func EnumerateWords(node Node) *NodeEnumerator {
+	return &NodeEnumerator{make([]Node, 0, 5), node}
+}
+
+func (this *NodeEnumerator) nextWord() *WordNode {
+
+	n := this.c
+	for {
+		for n == nil {
+			l := len(this.nodes)
+			if l == 0 {
+				return nil
+			}
+			n = this.nodes[l-1].next()
+			this.nodes = this.nodes[0 : l-1]
+		}
+		switch nn := n.(type) {
+		case *WordNode:
+			this.c = n.next()
+			return nn
+		case *ListNode:
+			this.nodes = append(this.nodes, n)
+			n = nn.firstChild
+		case *GroupNode:
+			this.nodes = append(this.nodes, n)
+			n = nn.firstChild
+		}
+	}
+
+	return nil
+}
+
 type Node interface {
 	nodeType() NodeType
 	next() Node
@@ -205,6 +242,29 @@ func printNode(ws *Workspace, n Node, includeBrackets bool) {
 
 	nodeToText(buf, n, includeBrackets)
 
+	ws.print(buf.String())
+}
+
+func printLine(ws *Workspace, firstNode, currentNode Node) {
+
+	buf := &bytes.Buffer{}
+
+	fl, _ := firstNode.position()
+	n := firstNode
+	l, _ := n.position()
+	for n != nil && l == fl {
+		buf.WriteString(" ")
+		if n == currentNode {
+			buf.WriteString(">")
+		}
+		nodeToText(buf, n, true)
+		n = n.next()
+		if n != nil {
+			l, _ = n.position()
+		}
+	}
+
+	buf.WriteString("\n")
 	ws.print(buf.String())
 }
 

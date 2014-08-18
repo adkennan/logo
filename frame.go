@@ -220,6 +220,7 @@ type Frame interface {
 	setTestValue(node Node)
 	getTestValue() Node
 	getVars() *VarList
+	isStepped() bool
 }
 
 type Procedure interface {
@@ -291,6 +292,8 @@ func (this *BuiltInFrame) getVars() *VarList {
 	return this.vars
 }
 
+func (this *BuiltInFrame) isStepped() bool { return false }
+
 type RootFrame struct {
 	ws      *Workspace
 	node    Node
@@ -328,6 +331,8 @@ func (this *RootFrame) getTestValue() Node {
 func (this *RootFrame) getVars() *VarList {
 	return this.vars
 }
+
+func (this *RootFrame) isStepped() bool { return false }
 
 type InterpretedFrame struct {
 	ws         *Workspace
@@ -404,12 +409,41 @@ func (this *InterpretedFrame) getVars() *VarList {
 	return this.vars
 }
 
+func (this *InterpretedFrame) isStepped() bool {
+	return this.procedure.step
+}
+
+func (this *InterpretedFrame) step(currentNode Node) *CallResult {
+	cl, _ := currentNode.position()
+	e := EnumerateWords(this.procedure.firstNode)
+	n := e.nextWord()
+	for n != nil {
+		l, _ := n.position()
+		if l == cl {
+			printLine(this.ws, n, currentNode)
+			c, err := this.ws.files.reader.ReadChar()
+			if err != nil {
+				return errorResult(err)
+			}
+			if c == K_ESCAPE {
+				return stopResult()
+			}
+			return nil
+		}
+		n = e.nextWord()
+	}
+
+	println("duh")
+	return nil
+}
+
 type InterpretedProcedure struct {
 	name       string
 	parameters []string
 	firstNode  Node
 	source     string
 	buried     bool
+	step       bool
 }
 
 func (this *InterpretedProcedure) createFrame(parentFrame Frame, caller *WordNode) Frame {
@@ -469,7 +503,7 @@ func readInterpretedProcedure(node Node) (*InterpretedProcedure, Node, error) {
 		return nil, nil, errorKeywordExpected(nil, keywordEnd)
 	}
 
-	return &InterpretedProcedure{strings.ToUpper(procName), params, firstNode, "", false}, n.next(), nil
+	return &InterpretedProcedure{strings.ToUpper(procName), params, firstNode, "", false, false}, n.next(), nil
 }
 
 func findInterpretedFrame(frame Frame) (*InterpretedFrame, error) {

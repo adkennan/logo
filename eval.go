@@ -59,6 +59,18 @@ func callProcedure(frame Frame, node Node, withInfix bool) (*CallResult, Node) {
 		}
 	}
 
+	intFrame, err := findInterpretedFrame(frame)
+	if err != nil {
+		return errorResult(err), nil
+	}
+
+	if intFrame != nil && intFrame.isStepped() {
+		sr := intFrame.step(wn)
+		if sr != nil {
+			return sr, nil
+		}
+	}
+
 	if procName == keywordEdit && node != nil {
 		parameters, node, err = fetchParameters(frame, wn, procName, node, 1, withInfix)
 		if err != nil {
@@ -368,7 +380,6 @@ func evalNodeStream(frame Frame, node Node, canReturnValue bool) *CallResult {
 
 	var lastValue Node = nil
 	var rv *CallResult = nil
-
 	for node != nil {
 		switch n := node.(type) {
 		case *ListNode:
