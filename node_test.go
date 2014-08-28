@@ -80,3 +80,18 @@ func TestEnumerateUntilNil(t *testing.T) {
 
 	assertWords(t, n, err, "Say", "Hello", "World", "Again", "")
 }
+
+func TestEnumerateExpression(t *testing.T) {
+
+	n, err := ParseString("2 * -5")
+
+	assertWords(t, n, err, "2", "*", "-5")
+}
+
+func TestEnumerateMultipleLines(t *testing.T) {
+
+	n, err := ParseString("  circle :n 1\n  circle :n -1\n  circs :n / 2")
+
+	assertWords(t, n, err, "circle", ":n", "1", "circle", ":n", "-1", "circs", ":n", "/", "2")
+
+}

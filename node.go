@@ -18,10 +18,11 @@ const (
 type NodeEnumerator struct {
 	nodes []Node
 	c     Node
+	ln    *WordNode
 }
 
 func EnumerateWords(node Node) *NodeEnumerator {
-	return &NodeEnumerator{make([]Node, 0, 5), node}
+	return &NodeEnumerator{make([]Node, 0, 5), node, nil}
 }
 
 func (this *NodeEnumerator) nextWord() *WordNode {
@@ -39,6 +40,7 @@ func (this *NodeEnumerator) nextWord() *WordNode {
 		switch nn := n.(type) {
 		case *WordNode:
 			this.c = n.next()
+			this.ln = nn
 			return nn
 		case *ListNode:
 			this.nodes = append(this.nodes, n)
@@ -50,6 +52,10 @@ func (this *NodeEnumerator) nextWord() *WordNode {
 	}
 
 	return nil
+}
+
+func (this *NodeEnumerator) lastWord() *WordNode {
+	return this.ln
 }
 
 type Node interface {
@@ -245,10 +251,11 @@ func printNode(ws *Workspace, n Node, includeBrackets bool) {
 	ws.print(buf.String())
 }
 
-func printLine(ws *Workspace, firstNode, currentNode Node) {
+func printLine(ws *Workspace, currentNode Node, enumerator *NodeEnumerator) {
 
 	buf := &bytes.Buffer{}
 
+	firstNode := enumerator.lastWord()
 	fl, _ := firstNode.position()
 	n := firstNode
 	l, _ := n.position()
@@ -258,7 +265,7 @@ func printLine(ws *Workspace, firstNode, currentNode Node) {
 			buf.WriteString(">")
 		}
 		nodeToText(buf, n, true)
-		n = n.next()
+		n = enumerator.nextWord()
 		if n != nil {
 			l, _ = n.position()
 		}

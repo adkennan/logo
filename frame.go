@@ -420,7 +420,7 @@ func (this *InterpretedFrame) step(currentNode Node) *CallResult {
 	for n != nil {
 		l, _ := n.position()
 		if l == cl {
-			printLine(this.ws, n, currentNode)
+			printLine(this.ws, currentNode, e)
 			c, err := this.ws.files.reader.ReadChar()
 			if err != nil {
 				return errorResult(err)

@@ -207,11 +207,11 @@ RUN
 
 THROW
 
-STEP ** Not Implemented **
+STEP 
 
 TRACE
 
-UNSTEP ** Not Implemented **
+UNSTEP 
 
 UNTRACE
 

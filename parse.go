@@ -199,8 +199,6 @@ func readUntil(r *bufio.Reader, line, col *int, untilChar rune) (n Node, err err
 			break
 		}
 
-		checkNewline(c, line, col)
-
 		if c == untilChar {
 			closed = true
 			break
@@ -272,8 +270,6 @@ func readWord(r *bufio.Reader, line, col *int) (*WordNode, error) {
 
 				isLiteral = true
 			}
-
-			checkNewline(c, line, col)
 
 			if !escaped {
 				if isSeparator(c, Word) {
