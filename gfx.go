@@ -126,11 +126,6 @@ type sdlWindow struct {
 
 func (this *sdlWindow) CreateSurface(w, h int, withAlpha bool) Surface {
 
-	var a uint32 = 0x000000ff
-	if withAlpha {
-		a = 0x000000ff
-	}
-
 	s := sdl.CreateRGBSurface(sdl.SWSURFACE,
 		int(w),
 		int(h),
@@ -138,10 +133,18 @@ func (this *sdlWindow) CreateSurface(w, h int, withAlpha bool) Surface {
 		0xff000000,
 		0x00ff0000,
 		0x0000ff00,
-		a)
+		0x000000ff)
+
+	var s2 *sdl.Surface
+	if withAlpha {
+		s2 = sdl.DisplayFormatAlpha(s)
+	} else {
+		s2 = sdl.DisplayFormat(s)
+	}
+	s.Free()
 
 	c := color.RGBA{0, 0, 0, 255}
-	return &sdlSurface{s, uintptr(unsafe.Pointer(s.Pixels)), w, h, c, toSdlColor(s.Format, c)}
+	return &sdlSurface{s2, uintptr(unsafe.Pointer(s2.Pixels)), w, h, c, toSdlColor(s2.Format, c)}
 }
 
 func (this *sdlWindow) SetClipRect(x, y, w, h int) {
@@ -380,7 +383,11 @@ func (this *sdlSurface) Fill(x1, y1, x2, y2 int) {
 }
 
 func (this *sdlSurface) FillTriangle(x1, y1, x2, y2, x3, y3 int) {
-	gfx.FilledTrigonColor(this.s, int16(x1), int16(y1), int16(x2), int16(y2), int16(x3), int16(y3), toSdlColor(this.s.Format, this.c))
+
+	r, g, b, a := this.c.RGBA()
+
+	gfx.FilledTrigonRGBA(this.s, int16(x1), int16(y1), int16(x2), int16(y2), int16(x3), int16(y3),
+		uint8(r), uint8(g), uint8(b), uint8(a))
 }
 
 func (this *sdlSurface) ColorAt(x, y int) color.Color {

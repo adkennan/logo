@@ -519,7 +519,7 @@ func findInterpretedFrame(frame Frame) (*InterpretedFrame, error) {
 			if c == nil {
 				return nil, nil
 			}
-			return nil, errorNoInterpretedFrame(c)
+			return nil, nil
 		case *BuiltInFrame:
 			frame = frame.parentFrame()
 

@@ -44,6 +44,9 @@ func _bi_Output(frame Frame, parameters []Node) *CallResult {
 	if err != nil {
 		return errorResult(err)
 	}
+	if f == nil {
+		return errorResult(errorNoInterpretedFrame(frame.caller()))
+	}
 	f.setReturnValue(parameters[0])
 	return stopResult()
 }
@@ -54,6 +57,9 @@ func _bi_Stop(frame Frame, parameters []Node) *CallResult {
 		return errorResult(err)
 	}
 
+	if f == nil {
+		return errorResult(errorNoInterpretedFrame(frame.caller()))
+	}
 	f.stop()
 	return stopResult()
 }
