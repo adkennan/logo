@@ -1,6 +1,7 @@
 package main
 
 import (
+	//	"fmt"
 	"strings"
 )
 
@@ -49,6 +50,7 @@ func callProcedure(frame Frame, node Node, withInfix bool) (*CallResult, Node) {
 			if proc.allowVarParameters() && wn.isFirstOfGroup {
 				paramCount = -1
 			}
+			//fmt.Printf("Fetching %d parameters for %s\n", paramCount, wn.value)
 			parameters, node, err = fetchParameters(frame, wn, procName, node.next(), paramCount, withInfix)
 			if err != nil {
 				return errorResult(err), nil
@@ -141,31 +143,26 @@ func fetchParameters(frame Frame, caller *WordNode, procName string, firstNode N
 	var rv *CallResult
 	ix := 0
 	for {
-		switch nn := n.(type) {
-		case *WordNode:
-			rv, n = evaluateNode(frame, nn, withInfix)
+		//fmt.Printf("Evaluating %s\n", n.String())
+		if n.nodeType() == List {
+			params = append(params, n)
+			n = n.next()
+			ix++
+		} else {
+
+			rv, n = evaluateExpression(frame, n)
 			if rv != nil {
 				if rv.hasError() {
 					return nil, nil, rv.err
 				}
+				//fmt.Printf("-> Got %s\n", rv.returnValue)
 				params = append(params, rv.returnValue)
+				ix++
+				//} else {
+				//fmt.Printf("-> Got nil\n")
 			}
-
-		case *GroupNode:
-			rv, n = evaluateNode(frame, nn, withInfix)
-			if rv != nil {
-				if rv.hasError() {
-					return nil, nil, rv.err
-				}
-				params = append(params, rv.returnValue)
-			}
-
-		case *ListNode:
-			params = append(params, nn)
-			n = nn.next()
 		}
 
-		ix++
 		if (paramCount > 0 && ix == paramCount) || n == nil {
 			break
 		}
@@ -184,6 +181,17 @@ func fetchParameters(frame Frame, caller *WordNode, procName string, firstNode N
 }
 
 func evalInstructionList(frame Frame, node Node, canReturn bool) *CallResult {
+
+	if node.nodeType() == Word {
+		rv, _ := evaluateExpression(frame, node)
+		if rv == nil {
+			return nil
+		}
+		if rv.hasError() {
+			return rv
+		}
+		node = rv.returnValue
+	}
 
 	switch ln := node.(type) {
 	case *WordNode:
@@ -219,18 +227,24 @@ func evaluateExpression(frame Frame, n Node) (*CallResult, Node) {
 	exit := false
 	var prevIx int = -2
 	for !exit && n != nil {
-
+		//fmt.Printf("-> expr %s\n", n.String())
 		switch nn := n.(type) {
 		case *GroupNode:
-			var rv *CallResult
-			rv = evalNodeStream(frame, nn.firstChild, true)
-			if rv != nil {
-				if rv.shouldStop() {
-					return rv, nil
+			if expectOp {
+				exit = true
+			} else {
+				var rv *CallResult
+				rv = evalNodeStream(frame, nn.firstChild, true)
+				if rv != nil {
+					if rv.shouldStop() {
+						return rv, nil
+					}
+					nl = append(nl, rv.returnValue)
+					expectOp = true
+					//fmt.Printf("-> got %s from group\n", rv.returnValue)
 				}
-				nl = append(nl, rv.returnValue)
+				n = n.next()
 			}
-			n = n.next()
 		case *WordNode:
 			ix := getInfixOp(nn.value)
 			if ix >= 0 {
@@ -289,6 +303,7 @@ func evaluateExpression(frame Frame, n Node) (*CallResult, Node) {
 				if expectOp {
 					exit = true
 				} else if !nn.isLiteral {
+					//fmt.Printf("Lets call a proc!\n")
 					var rv *CallResult
 					rv, n = callProcedure(frame, nn, true)
 					if rv != nil {
@@ -383,7 +398,12 @@ func evalNodeStream(frame Frame, node Node, canReturnValue bool) *CallResult {
 	for node != nil {
 		switch n := node.(type) {
 		case *ListNode:
-			return errorResult(errorWordExpected(n))
+			if canReturnValue {
+				lastValue = n
+				node = node.next()
+			} else {
+				return errorResult(errorWordExpected(n))
+			}
 		case *WordNode:
 			rv, node = evaluateNode(frame, n, true)
 			if rv != nil {

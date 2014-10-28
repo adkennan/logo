@@ -136,6 +136,9 @@ func initTurtle(ws *Workspace) *Turtle {
 	ws.registerBuiltIn("WRAP", "", 0, _t_Wrap)
 	ws.registerBuiltIn("FENCE", "", 0, _t_Fence)
 
+	ws.registerBuiltIn("SCREENWIDTH", "", 0, _t_ScreenWidth)
+	ws.registerBuiltIn("SCREENHEIGHT", "", 0, _t_ScreenHeight)
+
 	go turtle.listen()
 	go turtle.tick()
 
@@ -908,4 +911,13 @@ func _t_Dotp(frame Frame, parameters []Node) *CallResult {
 		return returnResult(falseNode)
 	}
 	return returnResult(trueNode)
+}
+
+func _t_ScreenWidth(frame Frame, parameters []Node) *CallResult {
+
+	return returnResult(createNumericNode(float64(frame.workspace().turtle.visW)))
+}
+
+func _t_ScreenHeight(frame Frame, parameters []Node) *CallResult {
+	return returnResult(createNumericNode(float64(frame.workspace().turtle.visH)))
 }

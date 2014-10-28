@@ -86,3 +86,15 @@ func TestParseExpressionNoSpaceBefore(t *testing.T) {
 	n, err := ParseString("1 +1")
 	assert(t, n, err, "1 + 1")
 }
+
+func TestParseMakeCommandWithExpression(t *testing.T) {
+	n, err := ParseString("make \"a ( 1 + 1 )")
+	assert(t, n, err, "make a ( 1 + 1 )")
+
+}
+
+func TestParseMakeCommand(t *testing.T) {
+
+	n, err := ParseString("make \"xx (screenwidth / -2)")
+	assert(t, n, err, "make xx ( screenwidth / -2 )")
+}

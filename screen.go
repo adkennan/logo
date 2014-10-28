@@ -63,6 +63,8 @@ func (this *Screen) Update() {
 	gm := this.ws.glyphMap
 	t := this.ws.turtle
 
+	prevSplitScreenLoc := -1
+
 	for {
 		screenDirty := false
 		drawTurtle := false
@@ -133,23 +135,36 @@ func (this *Screen) Update() {
 
 					case MT_UpdateText:
 						{
-							t := this.ws.turtle
 
 							gm := this.ws.glyphMap
 							c := this.ws.console
 							cs := c.Surface()
 							switch this.screenMode {
 							case screenModeText:
-								this.screen.DrawSurface(0, 0, cs)
+								for _, r := range rm.regions {
+									this.screen.ClearRect(t.screenColor, r.x, r.y, r.w, r.h)
+									this.screen.DrawSurfacePart(r.x, r.y, cs, r.x, r.y, r.w, r.h)
+								}
 							case screenModeSplit:
 								th := gm.charHeight * splitScreenSize
+								firstLine := c.FirstLineOfSplitScreen()
+								fl := (1 + firstLine) * gm.charHeight
+								this.screen.SetClipRect(0, this.h-th, this.w, this.h)
+								if prevSplitScreenLoc != firstLine {
 
-								this.screen.DrawSurfacePart(0, this.h-th, cs,
-									0, (1+c.FirstLineOfSplitScreen())*gm.charHeight, this.w, th)
+									this.screen.DrawSurfacePart(0, this.h-th, cs,
+										0, fl, this.w, th)
 
-								if t.turtleState == turtleStateShown {
-									drawTurtle = true
+									prevSplitScreenLoc = firstLine
+								} else {
+									ts := this.h - th
+
+									for _, r := range rm.regions {
+										this.screen.ClearRect(t.screenColor, r.x, ts+r.y, r.w, r.h)
+										this.screen.DrawSurfacePart(r.x, ts+r.y-fl, cs, r.x, r.y, r.w, r.h)
+									}
 								}
+								this.screen.ClearClipRect()
 							}
 							screenDirty = true
 						}
@@ -158,7 +173,12 @@ func (this *Screen) Update() {
 			}
 			if screenDirty {
 				if drawTurtle {
+					if this.screenMode == screenModeSplit {
+						th := gm.charHeight * splitScreenSize
+						this.screen.SetClipRect(0, 0, this.w, this.h-th)
+					}
 					this.DrawTurtle()
+					this.screen.ClearClipRect()
 				}
 				this.screen.Update()
 			}

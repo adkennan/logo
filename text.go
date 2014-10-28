@@ -204,12 +204,18 @@ func (this *ConsoleScreen) drawEditLine(cursorPos int, chars []rune) {
 	dst := this.sfcs[this.sfcIx]
 
 	sx := nx
-	w := len(chars) * gm.charWidth
-
+	sy := ny
 	this.clearEditLine()
 
+	maxX := gm.charWidth
 	for _, c := range chars {
 		nx = gm.renderGlyph(c, glyphStyleNormal, dst, nx, ny)
+		if nx >= dst.W() {
+			break
+		}
+		if nx > maxX {
+			maxX = nx
+		}
 	}
 
 	dst.SetColor(color.RGBA{255, 255, 255, 255})
@@ -219,7 +225,7 @@ func (this *ConsoleScreen) drawEditLine(cursorPos int, chars []rune) {
 		ny+gm.charHeight)
 
 	this.channel.Publish(newRegionMessage(MT_UpdateText, dst,
-		[]*Region{&Region{sx, ny, w, gm.charHeight}}))
+		[]*Region{&Region{sx, sy, maxX + gm.charWidth, gm.charHeight}}))
 }
 
 func (this *ConsoleScreen) Surface() Surface {

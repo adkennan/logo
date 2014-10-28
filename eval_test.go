@@ -71,3 +71,35 @@ func TestExprWithSub(t *testing.T) {
 func TestExprWithDiv(t *testing.T) {
 	assertExpression(t, "5 * 10 / 5", "10")
 }
+
+func TestExprWithParenProcAndNegative(t *testing.T) {
+
+	ws.registerBuiltIn("SW", "", 0, func(f Frame, p []Node) *CallResult {
+		return returnResult(createNumericNode(800.0))
+	})
+
+	assertExpression(t, "(SW / -2)", "-400")
+}
+
+func TestExprWithParenProc(t *testing.T) {
+
+	ws.registerBuiltIn("SW", "", 0, func(f Frame, p []Node) *CallResult {
+		return returnResult(createNumericNode(800.0))
+	})
+
+	assertExpression(t, "make \"s -1 make \"e 1 make \"a (:e - :s) / SW :a", "0.0025")
+}
+
+func TestSetVariable(t *testing.T) {
+
+	assertExpression(t, "make \"a 1 :a", "1")
+}
+
+func TestSetVariableWithParens(t *testing.T) {
+
+	assertExpression(t, "make \"b ( 1 + 1 ) :b", "2")
+}
+
+func TestSetVariableWithParensAndDiv(t *testing.T) {
+	assertExpression(t, "make \"s ( 10 - 1 ) / 800 :s", "0.01125")
+}

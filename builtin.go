@@ -1206,7 +1206,7 @@ func _bi_Wait(frame Frame, parameters []Node) *CallResult {
 
 func _bi_Run(frame Frame, parameters []Node) *CallResult {
 
-	return evalInstructionList(frame, parameters[0], false)
+	return evalInstructionList(frame, parameters[0], true)
 }
 
 func _bi_Po(frame Frame, parameters []Node) *CallResult {
